@@ -17,16 +17,25 @@ pub struct AppState {
 
 impl AppState {
     async fn new(frame_rx: watch::Receiver<Arc<Bytes>>) -> Result<AppState> {
-        gst::init()?;
+        const PIPELINE: &str = if cfg!(target_arch = "aarch64") {
+            "libcamerasrc exposure-time=4000 analogue-gain=1.5 awb-mode=daylight
+            ! video/x-raw,format=I420,width=1280,height=720,framerate=20/1
+            ! queue max-size-buffers=1 leaky=downstream
+            ! v4l2convert output-io-mode=mmap capture-io-mode=mmap
+            ! videoflip method=rotate-180
+            ! v4l2jpegenc output-io-mode=mmap capture-io-mode=mmap qos=false
+            ! appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false caps=image/jpeg"
+        } else {
+            "videotestsrc name=source is-live=true pattern=ball
+            ! video/x-raw,format=I420,width=640,height=480,framerate=60/1
+            ! jpegenc quality=75
+            ! appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false caps=image/jpeg"
+        };
 
-        let pipeline = gst::parse::launch(
-            "videotestsrc name=source is-live=true pattern=ball !
-         video/x-raw,format=I420,width=640,height=480,framerate=60/1 !
-         jpegenc quality=75 !
-         appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false caps=image/jpeg",
-        )?
-        .downcast::<gst::Pipeline>()
-        .map_err(|e| anyhow!("Launching pipeline failed: {}", e.type_().name()))?;
+        gst::init()?;
+        let pipeline = gst::parse::launch(PIPELINE)?
+            .downcast::<gst::Pipeline>()
+            .map_err(|e| anyhow!("Launching pipeline failed: {}", e.type_().name()))?;
 
         pipeline.set_state(gst::State::Playing)?;
 
@@ -77,12 +86,18 @@ async fn main() {
     tokio::spawn(produce_frames(tx, sink));
 
     let app = Router::new()
-        .route("/stream.mjpg", get(handlers::get_stream_mjpeg))
-        .route("/camera/property/{name}", put(handlers::put_camera_property))
-        .route("/camera/property/{name}", get(handlers::get_camera_property))
+        .route("/stream", get(handlers::get_stream_mjpeg))
+        .route(
+            "/camera/property/{name}",
+            put(handlers::put_camera_property),
+        )
+        .route(
+            "/camera/property/{name}",
+            get(handlers::get_camera_property),
+        )
         .with_state(app_state);
 
-    let addr = "127.0.0.1:3000";
+    let addr = "0.0.0.0:3000";
     println!("listening on http://{addr}/stream.mjpg");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
