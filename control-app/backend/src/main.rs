@@ -6,6 +6,7 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use gstreamer_video::{VideoFormat, VideoFrameRef, VideoInfo};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::watch;
 use turbojpeg::{Compressor, Subsamp, YuvImage};
@@ -15,10 +16,22 @@ mod handlers;
 const WIDTH: u32 = 1440;
 const HEIGHT: u32 = 810;
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CameraSettings {
+    exposure_time: u32,
+    gain: f64,
+    brightness: i32,
+    contrast: i32,
+    saturation: i32,
+    sharpness: i32,
+    awb_enable: bool,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
     pipeline: gst::Pipeline,
+    camera_settings: CameraSettings,
 }
 
 impl AppState {
@@ -48,7 +61,19 @@ impl AppState {
 
         pipeline.set_state(gst::State::Playing)?;
 
-        Ok(AppState { frame_rx, pipeline })
+        Ok(AppState {
+            frame_rx,
+            pipeline,
+            camera_settings: CameraSettings {
+                exposure_time: 4000,
+                gain: 1.0,
+                brightness: 0,
+                contrast: 0,
+                saturation: 0,
+                sharpness: 0,
+                awb_enable: true,
+            },
+        })
     }
 
     fn get_sink(&self) -> gst_app::AppSink {
@@ -98,19 +123,22 @@ async fn produce_frames(tx: watch::Sender<Arc<Bytes>>, sink: gst_app::AppSink) {
 
         let mut yuv = Vec::with_capacity(w * h * 3 / 2);
 
-        for row in 0..h {
+        for row in (0..h).rev() {
             let s = row * sy;
-            yuv.extend_from_slice(&y[s..s + w]);
+            let slice = &y[s..s + w];
+            yuv.extend(slice.iter().rev());
         }
 
-        for row in 0..ch {
+        for row in (0..ch).rev() {
             let s = row * su;
-            yuv.extend_from_slice(&u[s..s + cw]);
+            let slice = &u[s..s + cw];
+            yuv.extend(slice.iter().rev());
         }
 
-        for row in 0..ch {
+        for row in (0..ch).rev() {
             let s = row * sv;
-            yuv.extend_from_slice(&v[s..s + cw]);
+            let slice = &v[s..s + cw];
+            yuv.extend(slice.iter().rev());
         }
 
         let yuv_img = YuvImage {
@@ -147,14 +175,15 @@ async fn main() {
     tokio::spawn(produce_frames(tx, sink));
 
     let api_routes = Router::new()
-        .route("/stream", get(handlers::get_stream_mjpeg))
+        .route("/stream", get(handlers::stream::get_stream_mjpeg))
+        .route("/ws", get(handlers::ws::ws_handler))
         .route(
             "/camera/property/{name}",
-            put(handlers::put_camera_property),
+            put(handlers::rest::put_camera_property),
         )
         .route(
             "/camera/property/{name}",
-            get(handlers::get_camera_property),
+            get(handlers::rest::get_camera_property),
         )
         .with_state(app_state);
 
