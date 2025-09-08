@@ -8,10 +8,16 @@ use axum::{body::Body, response::IntoResponse};
 use glib::Value as GValue;
 use glib::{object::ObjectExt, translate::ToGlibPtr};
 use gstreamer::{glib, prelude::GObjectExtManualGst};
+use http::StatusCode;
 use http::{HeaderValue, Response};
+use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
+
+#[derive(RustEmbed)]
+#[folder = "../frontend/build"]
+struct Assets;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -180,4 +186,38 @@ pub async fn get_stream_mjpeg(
         .header("Pragma", "no-cache")
         .body(body)
         .unwrap()
+}
+
+pub async fn asset_response(Path(path): Path<String>) -> impl IntoResponse {
+    let path = path.trim_start_matches('/');
+
+    let candidate = if let Some(file) = Assets::get(path) {
+        file
+    } else if let Some(index) = Assets::get("index.html") {
+        index
+    } else {
+        return (StatusCode::NOT_FOUND, "Not found").into_response();
+    };
+
+    let mime = if Assets::get(path).is_some() {
+        mime_guess::from_path(path).first_or_octet_stream()
+    } else {
+        mime_guess::mime::TEXT_HTML_UTF_8
+    };
+
+    let cache = if mime == mime_guess::mime::TEXT_HTML_UTF_8 {
+        "no-cache"
+    } else {
+        "public, max-age=31536000, immutable"
+    };
+
+    let mut resp =
+        axum::response::Response::new(Body::from(bytes::Bytes::from(candidate.data.into_owned())));
+    let headers = resp.headers_mut();
+    headers.insert(
+        http::header::CONTENT_TYPE,
+        HeaderValue::from_str(mime.as_ref()).unwrap(),
+    );
+    headers.insert(http::header::CACHE_CONTROL, HeaderValue::from_static(cache));
+    resp
 }

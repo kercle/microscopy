@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use axum::extract::Path;
 use axum::{Router, routing::get, routing::put};
 use bytes::Bytes;
 use gstreamer as gst;
@@ -145,7 +146,7 @@ async fn main() {
 
     tokio::spawn(produce_frames(tx, sink));
 
-    let app = Router::new()
+    let api_routes = Router::new()
         .route("/stream", get(handlers::get_stream_mjpeg))
         .route(
             "/camera/property/{name}",
@@ -157,8 +158,16 @@ async fn main() {
         )
         .with_state(app_state);
 
+    let app = Router::new()
+        .nest("/api", api_routes)
+        .route("/{*path}", get(handlers::asset_response))
+        .route(
+            "/",
+            get(|| handlers::asset_response(Path("index.html".to_string()))),
+        );
+
     let addr = "0.0.0.0:3000";
-    println!("listening on http://{addr}/stream.mjpg");
+    println!("listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
