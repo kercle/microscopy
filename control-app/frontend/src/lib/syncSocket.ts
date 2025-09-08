@@ -1,17 +1,26 @@
-export function connectSocket(url: string, onMsg: (data: any) => void) {
-    let ws: WebSocket;
-    let retry = 500;
+export function connect(url: string) : WebSocket {
+    console.log('Connecting WS to', url);
+    const reconnectDelay = 1500;
 
-    const open = () => {
-        ws = new WebSocket(url);
-        ws.onopen = () => { retry = 500; };
-        ws.onmessage = (ev) => onMsg(JSON.parse(ev.data));
-        ws.onclose = () => setTimeout(open, retry = Math.min(retry * 1.5, 5000));
-        ws.onerror = () => ws.close();
-    };
-    open();
+    let ws = new WebSocket(url);
 
-    return {
-        send: (obj: any) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify(obj)),
+    ws.onopen = () => {
+        console.log('WS connected');
     };
+
+    ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        console.log('WS msg', msg);
+    };
+
+    ws.onclose = () => {
+        console.log('WS closed, reconnecting in', reconnectDelay);
+    };
+
+    ws.onerror = () => {
+        console.log('WS error, closing');
+        ws?.close();
+    };
+
+    return ws;
 }
