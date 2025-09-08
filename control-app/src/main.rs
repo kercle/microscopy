@@ -18,11 +18,11 @@ pub struct AppState {
 impl AppState {
     async fn new(frame_rx: watch::Receiver<Arc<Bytes>>) -> Result<AppState> {
         const PIPELINE: &str = if cfg!(target_arch = "aarch64") {
-            "libcamerasrc exposure-time-mode=manual exposure-time=4000
-            ! video/x-raw,format=I420,width=1280,height=720,framerate=20/1
+            "libcamerasrc name=source exposure-time-mode=manual exposure-time=4000
+            ! video/x-raw,format=NV12,width=1280,height=720,framerate=20/1
             ! queue max-size-buffers=1 leaky=downstream
             ! v4l2convert output-io-mode=mmap capture-io-mode=mmap
-            ! v4l2jpegenc output-io-mode=mmap capture-io-mode=mmap qos=false extra-controls=s,compression_quality=100
+            ! v4l2jpegenc output-io-mode=mmap capture-io-mode=mmap qos=false
             ! appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false caps=image/jpeg"
         } else {
             "videotestsrc name=source is-live=true pattern=ball
@@ -35,6 +35,11 @@ impl AppState {
         let pipeline = gst::parse::launch(PIPELINE)?
             .downcast::<gst::Pipeline>()
             .map_err(|e| anyhow!("Launching pipeline failed: {}", e.type_().name()))?;
+
+        if cfg!(target_arch = "aarch64") {
+            let cam = pipeline.by_name("source").unwrap();
+            cam.set_property("awb-enable", false);
+        }
 
         pipeline.set_state(gst::State::Playing)?;
 
