@@ -18,16 +18,15 @@ pub struct AppState {
 impl AppState {
     async fn new(frame_rx: watch::Receiver<Arc<Bytes>>) -> Result<AppState> {
         const PIPELINE: &str = if cfg!(target_arch = "aarch64") {
-            "libcamerasrc exposure-time=4000 analogue-gain=1.5 awb-mode=daylight
+            "libcamerasrc exposure-time-mode=manual exposure-time=4000
             ! video/x-raw,format=I420,width=1280,height=720,framerate=20/1
             ! queue max-size-buffers=1 leaky=downstream
             ! v4l2convert output-io-mode=mmap capture-io-mode=mmap
-            ! videoflip method=rotate-180
-            ! v4l2jpegenc output-io-mode=mmap capture-io-mode=mmap qos=false
+            ! v4l2jpegenc output-io-mode=mmap capture-io-mode=mmap qos=false extra-controls=s,compression_quality=100
             ! appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false caps=image/jpeg"
         } else {
             "videotestsrc name=source is-live=true pattern=ball
-            ! video/x-raw,format=I420,width=640,height=480,framerate=60/1
+            ! video/x-raw,format=I420,width=1280,height=720,framerate=60/1
             ! jpegenc quality=75
             ! appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false caps=image/jpeg"
         };
