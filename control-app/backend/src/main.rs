@@ -32,6 +32,7 @@ impl AppState {
         let pipeline_string = format!(
             "{source_element}
             ! video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=20/1
+            ! videoflip method=rotate-180
             ! queue max-size-buffers=1 leaky=downstream
             ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
         );

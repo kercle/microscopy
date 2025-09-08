@@ -1,2 +1,2 @@
 [target.aarch64-unknown-linux-gnu]
-dockerfile = "control-app/Dockerfile"
+dockerfile = "control-app/backend/Dockerfile"
