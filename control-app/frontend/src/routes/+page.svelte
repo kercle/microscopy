@@ -4,7 +4,8 @@
 
 	let exposure_time = $state(0);
 	let brightness = $state(0);
-	let test_pattern = $state('smpte');
+	let contrast = $state(0);
+	let saturation = $state(0);
 
 	let ws: WebSocket | null = null;
 
@@ -17,7 +18,8 @@
 		let data = JSON.parse(event.data);
 		exposure_time = data.camera_properties.exposure_time ?? exposure_time;
 		brightness = data.camera_properties.brightness ?? brightness;
-		test_pattern = data.camera_properties.test_pattern ?? test_pattern;
+		contrast = data.camera_properties.contrast ?? contrast;
+		saturation = data.camera_properties.saturation ?? saturation;
 	};
 
 	let debounce_timeout: ReturnType<typeof setTimeout> | null = null;
@@ -47,9 +49,13 @@
 				v = Number(value);
 				brightness = v;
 				break;
-			case 'test_pattern':
-				v = value.toString();
-				test_pattern = v;
+			case 'contrast':
+				v = Number(value);
+				contrast = v;
+				break;
+			case 'saturation':
+				v = Number(value);
+				saturation = v;
 				break;
 			default:
 				return;
@@ -70,9 +76,10 @@
 	</div>
 	<div class="drawer-side">
 		<label for="my-drawer-2" aria-label="close sidebar" class="drawer-overlay"></label>
-		<ul class="menu bg-base-200 text-base-content min-h-full w-80 p-4">
+		<ul class="menu bg-base-200 text-base-content min-h-full w-100 p-4">
 			<div class="card bg-base-100 shadow-sm">
 				<div class="card-body">
+					<h2 class="card-title">Camera Controls</h2>
 					<SliderWithTextbox
 						label="Exposure Time (µs)"
 						value={exposure_time}
@@ -89,6 +96,24 @@
 						max={1}
 						step={0.01}
 						onChange={(v: number) => updateParam(v, 'brightness')}
+					/>
+
+					<SliderWithTextbox
+						label="Contrast"
+						value={contrast}
+						min={0}
+						max={5}
+						step={0.01}
+						onChange={(v: number) => updateParam(v, 'contrast')}
+					/>
+
+					<SliderWithTextbox
+						label="Saturation"
+						value={saturation}
+						min={0}
+						max={5}
+						step={0.01}
+						onChange={(v: number) => updateParam(v, 'saturation')}
 					/>
 				</div>
 			</div>

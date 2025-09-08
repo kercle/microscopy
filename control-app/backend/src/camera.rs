@@ -25,8 +25,8 @@ pub struct CameraProperties {
     pub exposure_time: Option<u32>,
     pub gain: Option<f64>,
     pub brightness: Option<f32>,
-    pub contrast: Option<i32>,
-    pub saturation: Option<i32>,
+    pub contrast: Option<f32>,
+    pub saturation: Option<f32>,
     pub sharpness: Option<i32>,
     pub awb_enable: Option<bool>,
     pub test_pattern: Option<TestPattern>,
@@ -72,22 +72,20 @@ impl CameraProperties {
 
 
         if let Some(v) = self.exposure_time && source.has_property("exposure-time") {
-            println!("Setting exposure time to {v}");
             source.set_property("exposure-time", v as i32);
         }
         // if let Some(v) = self.gain && source.has_property("gain") {
         //     source.set_property("gain", v);
         // }
         if let Some(v) = self.brightness && source.has_property("brightness") {
-            println!("Setting brightness to {v}");
             source.set_property("brightness", v);
         }
-        // if let Some(v) = self.contrast && source.has_property("contrast") {
-        //     source.set_property("contrast", v);
-        // }
-        // if let Some(v) = self.saturation && source.has_property("saturation") {
-        //     source.set_property("saturation", v);
-        // }
+        if let Some(v) = self.contrast && source.has_property("contrast") {
+            source.set_property("contrast", v);
+        }
+        if let Some(v) = self.saturation && source.has_property("saturation") {
+            source.set_property("saturation", v);
+        }
         // if let Some(v) = self.sharpness && source.has_property("sharpness") {
         //     source.set_property("sharpness", v);
         // }
