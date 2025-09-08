@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use glib::Value as GValue;
 use gstreamer::glib;
+use gstreamer::prelude::GObjectExtManualGst;
+use gstreamer::{self as gst, glib::object::ObjectExt};
 // use glib::{object::ObjectExt, translate::ToGlibPtr};
 // use gstreamer::{prelude::GObjectExtManualGst};
 use anyhow::Result;
@@ -61,6 +63,64 @@ impl Display for TestPattern {
             TestPattern::Smpte => write!(f, "smpte"),
             TestPattern::Snow => write!(f, "snow"),
             TestPattern::Ball => write!(f, "ball"),
+        }
+    }
+}
+
+impl CameraProperties {
+    pub fn write_to_source(&self, source: &gst::Element) {
+
+
+        if let Some(v) = self.exposure_time && source.has_property("exposure-time") {
+            source.set_property("exposure-time", v);
+        }
+        if let Some(v) = self.gain && source.has_property("gain") {
+            source.set_property("gain", v);
+        }
+        if let Some(v) = self.brightness && source.has_property("brightness") {
+            source.set_property("brightness", v);
+        }
+        if let Some(v) = self.contrast && source.has_property("contrast") {
+            source.set_property("contrast", v);
+        }
+        if let Some(v) = self.saturation && source.has_property("saturation") {
+            source.set_property("saturation", v);
+        }
+        if let Some(v) = self.sharpness && source.has_property("sharpness") {
+            source.set_property("sharpness", v);
+        }
+        if let Some(v) = self.awb_enable && source.has_property("awb-enable") {
+            source.set_property("awb-enable", v);
+        }
+        if let Some(v) = &self.test_pattern && source.has_property("pattern") {
+            source.set_property_from_str("pattern", &v.to_string());
+        }
+    }
+
+    pub fn patch(&mut self, other: &Self) {
+        if let Some(v) = other.exposure_time {
+            self.exposure_time = Some(v);
+        }
+        if let Some(v) = other.gain {
+            self.gain = Some(v);
+        }
+        if let Some(v) = other.brightness {
+            self.brightness = Some(v);
+        }
+        if let Some(v) = other.contrast {
+            self.contrast = Some(v);
+        }
+        if let Some(v) = other.saturation {
+            self.saturation = Some(v);
+        }
+        if let Some(v) = other.sharpness {
+            self.sharpness = Some(v);
+        }
+        if let Some(v) = other.awb_enable {
+            self.awb_enable = Some(v);
+        }
+        if let Some(v) = &other.test_pattern {
+            self.test_pattern = Some(v.clone());
         }
     }
 }

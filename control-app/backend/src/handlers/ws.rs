@@ -10,12 +10,17 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
     ws.on_upgrade(move |socket| handle_socket(socket, app))
 }
 
-async fn process_message(msg: axum::extract::ws::Message, app: &mut AppState) {
+async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
     match msg {
         axum::extract::ws::Message::Text(text) => {
             println!("Received text message: {}", text);
-
             // Handle text message
+            if let Ok(new_params) = serde_json::from_str::<crate::Parameters>(&text) {
+                let mut p = app.parameters_controller.write().await;
+                p.patch(&new_params);
+            } else {
+                eprintln!("Failed to parse parameters from text message");
+            }
         }
         axum::extract::ws::Message::Binary(bin) => {
             println!("Received binary message: {:?}", bin);
@@ -37,7 +42,10 @@ async fn process_message(msg: axum::extract::ws::Message, app: &mut AppState) {
 }
 
 async fn handle_socket(mut socket: WebSocket, mut app: AppState) {
-    
+    let mut rx = {
+        let p = app.parameters_controller.read().await;
+        p.subscribe_changes()
+    };
 
     loop {
         tokio::select! {
@@ -51,6 +59,18 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) {
                         break;
                     }
                     None => break, // Connection closed
+                }
+            }
+            res = rx.changed() => {
+                if res.is_err() {
+                    break; // Sender dropped
+                }
+
+                let params = rx.borrow_and_update().clone();
+
+                let params_json = serde_json::to_string(&params).unwrap();
+                if socket.send(axum::extract::ws::Message::Text(params_json.into())).await.is_err() {
+                    break;
                 }
             }
         }

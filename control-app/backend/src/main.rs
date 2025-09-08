@@ -1,12 +1,13 @@
 use anyhow::{Result, anyhow};
 use axum::extract::Path;
-use axum::{Router, routing::get, routing::put};
+use axum::{Router, routing::get, routing::patch};
 use bytes::Bytes;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::watch;
+use tokio::sync::{RwLock, watch};
 
 use camera::CameraProperties;
 use camera::{HEIGHT, WIDTH};
@@ -14,15 +15,54 @@ use camera::{HEIGHT, WIDTH};
 mod camera;
 mod handlers;
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Parameters {
-    version: u64,
     camera_properties: CameraProperties,
 }
 
 impl Parameters {
-    fn update_camera_properties(&mut self, new_props: CameraProperties) {
-        self.camera_properties = new_props;
-        self.version += 1;
+    fn new() -> Self {
+        Parameters {
+            camera_properties: CameraProperties {
+                exposure_time: Some(4000),
+                gain: Some(1.0),
+                brightness: Some(0),
+                contrast: Some(0),
+                saturation: Some(0),
+                sharpness: Some(0),
+                awb_enable: Some(true),
+                test_pattern: None,
+            },
+        }
+    }
+
+    fn patch(&mut self, other: &Self) {
+        self.camera_properties.patch(&other.camera_properties);
+    }
+}
+
+pub struct ParametersController {
+    parameters: Parameters,
+    notify_channel: watch::Sender<Parameters>,
+}
+
+impl ParametersController {
+    fn new() -> Self {
+        let (notify_channel, _) = watch::channel(Parameters::new());
+
+        ParametersController {
+            parameters: Parameters::new(),
+            notify_channel,
+        }
+    }
+
+    pub fn subscribe_changes(&self) -> watch::Receiver<Parameters> {
+        self.notify_channel.subscribe()
+    }
+
+    pub fn patch(&mut self, other: &Parameters) {
+        self.parameters.patch(&other);
+        let _ = self.notify_channel.send(self.parameters.clone());
     }
 }
 
@@ -30,13 +70,13 @@ impl Parameters {
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
     pipeline: gst::Pipeline,
-    parameters: Arc<Parameters>,
+    parameters_controller: Arc<RwLock<ParametersController>>,
 }
 
 impl AppState {
     async fn new(
         frame_rx: watch::Receiver<Arc<Bytes>>,
-        parameters: Arc<Parameters>,
+        parameters: ParametersController,
     ) -> Result<AppState> {
         let source_element = if cfg!(target_arch = "aarch64") {
             "libcamerasrc name=source exposure-time-mode=manual exposure-time=4000"
@@ -66,7 +106,7 @@ impl AppState {
         Ok(AppState {
             frame_rx,
             pipeline,
-            parameters,
+            parameters_controller: Arc::new(RwLock::new(parameters)),
         })
     }
 
@@ -85,37 +125,41 @@ impl AppState {
 
 #[tokio::main]
 async fn main() {
-    let (tx, rx) = watch::channel::<Arc<Bytes>>(Arc::new(Bytes::new()));
-    let parameters = Arc::new(Parameters {
-        version: 1,
-        camera_properties: CameraProperties {
-            exposure_time: Some(4000),
-            gain: Some(1.0),
-            brightness: Some(0),
-            contrast: Some(0),
-            saturation: Some(0),
-            sharpness: Some(0),
-            awb_enable: Some(true),
-            test_pattern: None,
-        },
-    });
+    let parameters_controller = ParametersController::new();
+    let mut state_notify = parameters_controller.subscribe_changes();
 
-    let app_state = AppState::new(rx, parameters).await.unwrap();
+    let (frame_tx, frame_rx) = watch::channel::<Arc<Bytes>>(Arc::new(Bytes::new()));
+    let app_state = AppState::new(frame_rx, parameters_controller)
+        .await
+        .unwrap();
     let sink = app_state.get_sink();
 
-    tokio::spawn(camera::produce_frames(tx, sink));
+    let source = app_state.get_source();
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                ret = state_notify.changed() => {
+                    if ret.is_err() {
+                        // Sender dropped
+                        break;
+                    }
+
+                    let params = state_notify.borrow_and_update();
+
+                    println!("Parameters changed, updating camera properties");
+                    params.camera_properties.write_to_source(&source);
+                }
+            }
+        }
+    });
+
+    tokio::spawn(camera::produce_frames(frame_tx, sink));
 
     let api_routes = Router::new()
         .route("/stream", get(handlers::stream::get_stream_mjpeg))
         .route("/ws", get(handlers::ws::ws_handler))
-        .route(
-            "/camera/properties",
-            put(handlers::rest::put_camera_properties),
-        )
-        .route(
-            "/camera/properties",
-            get(handlers::rest::get_camera_properties),
-        )
+        .route("/parameters", patch(handlers::rest::patch_parameters))
+        .route("/parameters", get(handlers::rest::get_parameters))
         .with_state(app_state);
 
     let app = Router::new()

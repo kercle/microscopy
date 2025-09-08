@@ -4,7 +4,7 @@ use http::Response;
 
 use crate::AppState;
 
-pub async fn put_camera_properties(
+pub async fn patch_parameters(
     State(state): axum::extract::State<AppState>,
 ) -> impl IntoResponse {
     Response::builder()
@@ -15,10 +15,13 @@ pub async fn put_camera_properties(
         .unwrap()
 }
 
-pub async fn get_camera_properties(
+pub async fn get_parameters(
     State(state): axum::extract::State<AppState>,
 ) -> impl IntoResponse {
-    let body = serde_json::to_string(&state.parameters.camera_properties);
+    let body = {
+        let p = state.parameters_controller.read().await;
+        serde_json::to_string(&p.parameters)
+    };
 
     match body {
         Ok(body) => Response::builder()

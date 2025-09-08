@@ -1,4 +1,5 @@
-export function connect(url: string) : WebSocket {
+export const connect = (onmsg_callback: (msg: any) => void) : WebSocket => {
+    let url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/ws';
     console.log('Connecting WS to', url);
     const reconnectDelay = 1500;
 
@@ -9,8 +10,7 @@ export function connect(url: string) : WebSocket {
     };
 
     ws.onmessage = (ev) => {
-        const msg = JSON.parse(ev.data);
-        console.log('WS msg', msg);
+        onmsg_callback(ev);
     };
 
     ws.onclose = () => {
