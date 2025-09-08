@@ -22,30 +22,28 @@ pub struct AppState {
 
 impl AppState {
     async fn new(frame_rx: watch::Receiver<Arc<Bytes>>) -> Result<AppState> {
-        let pipeline_string = if cfg!(target_arch = "aarch64") {
-            format!(
-                "libcamerasrc name=source exposure-time-mode=manual exposure-time=4000
-                ! video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=20/1
-                ! queue max-size-buffers=1 leaky=downstream
-                ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
-            )
+        let source_element = if cfg!(target_arch = "aarch64") {
+            "libcamerasrc name=source exposure-time-mode=manual exposure-time=4000"
         } else {
-            format!(
-                "videotestsrc name=source is-live=true pattern=smpte
-                ! video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=20/1
-                ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
-            )
+            "videotestsrc name=source is-live=true pattern=smpte"
         };
+
+        let pipeline_string = format!(
+            "{source_element}
+            ! video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=20/1
+            ! queue max-size-buffers=1 leaky=downstream
+            ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
+        );
 
         gst::init()?;
         let pipeline = gst::parse::launch(&pipeline_string)?
             .downcast::<gst::Pipeline>()
             .map_err(|e| anyhow!("Launching pipeline failed: {}", e.type_().name()))?;
 
-        // if cfg!(target_arch = "aarch64") {
-        //     let cam = pipeline.by_name("source").unwrap();
-        //     cam.set_property("awb-enable", false);
-        // }
+        if cfg!(target_arch = "aarch64") {
+            let cam = pipeline.by_name("source").unwrap();
+            cam.set_property("awb-enable", false);
+        }
 
         pipeline.set_state(gst::State::Playing)?;
 

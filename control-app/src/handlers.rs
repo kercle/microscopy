@@ -145,7 +145,7 @@ pub async fn get_stream_mjpeg(
 
     let mut rx = state.frame_rx.clone();
     let (body_tx, body_rx) =
-        tokio::sync::mpsc::channel::<Result<axum::body::Bytes, anyhow::Error>>(100);
+        tokio::sync::mpsc::channel::<Result<axum::body::Bytes, anyhow::Error>>(5);
 
     tokio::spawn(async move {
         while let Ok(()) = rx.changed().await {
