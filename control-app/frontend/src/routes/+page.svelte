@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { connect } from '$lib/syncSocket';
+	import SliderWithTextbox from '$lib/components/sliderWithTextbox.svelte';
 
 	let exposure_time = $state(0);
+	let brightness = $state(0);
 	let test_pattern = $state('smpte');
 
 	let ws: WebSocket | null = null;
@@ -14,11 +16,11 @@
 	const onMessageCallback = (event: MessageEvent) => {
 		let data = JSON.parse(event.data);
 		exposure_time = data.camera_properties.exposure_time ?? exposure_time;
+		brightness = data.camera_properties.brightness ?? brightness;
 		test_pattern = data.camera_properties.test_pattern ?? test_pattern;
 	};
 
-	// Debounced sender while dragging
-	let t: ReturnType<typeof setTimeout> | null = null;
+	let debounce_timeout: ReturnType<typeof setTimeout> | null = null;
 
 	const sendCameraProperty = (t: string, v: any) => {
 		if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -33,45 +35,63 @@
 		);
 	};
 
-	const updateParam = (e: Event, param: string) => {
-		let v;
+	const updateParam = (value: any, param: string) => {
+		let v: any = null;
 
 		switch (param) {
 			case 'exposure_time':
-				v = Number((e.target as HTMLInputElement).value);
-				if (v < 0 || v > 30000 || isNaN(v)) return;
+				v = Number(value);
 				exposure_time = v;
 				break;
+			case 'brightness':
+				v = Number(value);
+				brightness = v;
+				break;
 			case 'test_pattern':
-				v = (e.target as HTMLInputElement).value;
-				if (!['smpte', 'snow', 'ball'].includes(v.toString())) return;
-				test_pattern = v.toString();
+				v = value.toString();
+				test_pattern = v;
 				break;
 			default:
 				return;
 		}
 
-		if (t) clearTimeout(t);
-		t = setTimeout(() => sendCameraProperty(param, v), 50);
+		if (debounce_timeout) {
+			clearTimeout(debounce_timeout);
+		}
+		debounce_timeout = setTimeout(() => sendCameraProperty(param, v), 50);
 	};
 </script>
 
-<input
-	class="range range-primary"
-	type="range"
-	min="0"
-	max="30000"
-	step="1"
-	bind:value={exposure_time}
-	oninput={(e) => updateParam(e, 'exposure_time')}
-	onmousedown={() => (t = null)}
-/>
+<div class="drawer drawer-end lg:drawer-open">
+	<input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
+	<div class="drawer-content flex flex-col items-center justify-center">
+		<img src="/api/stream" alt="Microscope camera stream" />
+		<label for="my-drawer-2" class="btn btn-primary drawer-button lg:hidden"> Open drawer </label>
+	</div>
+	<div class="drawer-side">
+		<label for="my-drawer-2" aria-label="close sidebar" class="drawer-overlay"></label>
+		<ul class="menu bg-base-200 text-base-content min-h-full w-80 p-4">
+			<div class="card bg-base-100 shadow-sm">
+				<div class="card-body">
+					<SliderWithTextbox
+						label="Exposure Time (µs)"
+						value={exposure_time}
+						min={0}
+						max={30000}
+						step={1}
+						onChange={(v: number) => updateParam(v, 'exposure_time')}
+					/>
 
-<select bind:value={test_pattern} onchange={(e) => updateParam(e, 'test_pattern')}>
-	<option value="smpte">SMPTE</option>
-	<option value="snow">Snow</option>
-	<option value="ball">Ball</option>
-</select>
-
-<p>Value: {exposure_time}</p>
-<img src="/api/stream" alt="Microscope camera stream" />
+					<SliderWithTextbox
+						label="Brightness"
+						value={brightness}
+						min={-1}
+						max={1}
+						step={0.01}
+						onChange={(v: number) => updateParam(v, 'brightness')}
+					/>
+				</div>
+			</div>
+		</ul>
+	</div>
+</div>

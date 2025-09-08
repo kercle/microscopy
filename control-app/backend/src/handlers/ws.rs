@@ -47,6 +47,19 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) {
         p.subscribe_changes()
     };
 
+    let params_json = {
+        let p = app.parameters_controller.read().await;
+        serde_json::to_string(&p.parameters).unwrap()
+    };
+
+    if socket
+        .send(axum::extract::ws::Message::Text(params_json.into()))
+        .await
+        .is_err()
+    {
+        return;
+    }
+
     loop {
         tokio::select! {
             msg = socket.recv() => {

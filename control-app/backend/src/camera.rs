@@ -24,7 +24,7 @@ pub const HEIGHT: u32 = 810;
 pub struct CameraProperties {
     pub exposure_time: Option<u32>,
     pub gain: Option<f64>,
-    pub brightness: Option<i32>,
+    pub brightness: Option<f32>,
     pub contrast: Option<i32>,
     pub saturation: Option<i32>,
     pub sharpness: Option<i32>,
@@ -72,26 +72,28 @@ impl CameraProperties {
 
 
         if let Some(v) = self.exposure_time && source.has_property("exposure-time") {
-            source.set_property("exposure-time", v);
+            println!("Setting exposure time to {v}");
+            source.set_property("exposure-time", v as i32);
         }
-        if let Some(v) = self.gain && source.has_property("gain") {
-            source.set_property("gain", v);
-        }
+        // if let Some(v) = self.gain && source.has_property("gain") {
+        //     source.set_property("gain", v);
+        // }
         if let Some(v) = self.brightness && source.has_property("brightness") {
+            println!("Setting brightness to {v}");
             source.set_property("brightness", v);
         }
-        if let Some(v) = self.contrast && source.has_property("contrast") {
-            source.set_property("contrast", v);
-        }
-        if let Some(v) = self.saturation && source.has_property("saturation") {
-            source.set_property("saturation", v);
-        }
-        if let Some(v) = self.sharpness && source.has_property("sharpness") {
-            source.set_property("sharpness", v);
-        }
-        if let Some(v) = self.awb_enable && source.has_property("awb-enable") {
-            source.set_property("awb-enable", v);
-        }
+        // if let Some(v) = self.contrast && source.has_property("contrast") {
+        //     source.set_property("contrast", v);
+        // }
+        // if let Some(v) = self.saturation && source.has_property("saturation") {
+        //     source.set_property("saturation", v);
+        // }
+        // if let Some(v) = self.sharpness && source.has_property("sharpness") {
+        //     source.set_property("sharpness", v);
+        // }
+        // if let Some(v) = self.awb_enable && source.has_property("awb-enable") {
+        //     source.set_property("awb-enable", v);
+        // }
         if let Some(v) = &self.test_pattern && source.has_property("pattern") {
             source.set_property_from_str("pattern", &v.to_string());
         }

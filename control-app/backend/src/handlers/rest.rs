@@ -5,7 +5,7 @@ use http::Response;
 use crate::AppState;
 
 pub async fn patch_parameters(
-    State(state): axum::extract::State<AppState>,
+    State(_state): axum::extract::State<AppState>,
 ) -> impl IntoResponse {
     Response::builder()
         .status(200)

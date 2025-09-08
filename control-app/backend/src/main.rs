@@ -26,7 +26,7 @@ impl Parameters {
             camera_properties: CameraProperties {
                 exposure_time: Some(4000),
                 gain: Some(1.0),
-                brightness: Some(0),
+                brightness: Some(0.0),
                 contrast: Some(0),
                 saturation: Some(0),
                 sharpness: Some(0),
@@ -121,6 +121,16 @@ impl AppState {
     fn get_source(&self) -> gst::Element {
         self.pipeline.by_name("source").unwrap()
     }
+
+    fn stop_pipeline(&self) -> Result<()> {
+        self.pipeline.set_state(gst::State::Null)?;
+        Ok(())
+    }
+
+    fn play_pipeline(&self) -> Result<()> {
+        self.pipeline.set_state(gst::State::Playing)?;
+        Ok(())
+    }
 }
 
 #[tokio::main]
@@ -134,8 +144,10 @@ async fn main() {
         .unwrap();
     let sink = app_state.get_sink();
 
-    let source = app_state.get_source();
+    let app_state_clone = app_state.clone();
     tokio::spawn(async move {
+        let app_state = app_state_clone;
+
         loop {
             tokio::select! {
                 ret = state_notify.changed() => {
@@ -147,7 +159,9 @@ async fn main() {
                     let params = state_notify.borrow_and_update();
 
                     println!("Parameters changed, updating camera properties");
-                    params.camera_properties.write_to_source(&source);
+                    app_state.stop_pipeline().unwrap();
+                    params.camera_properties.write_to_source(&app_state.get_source());
+                    app_state.play_pipeline().unwrap();
                 }
             }
         }
