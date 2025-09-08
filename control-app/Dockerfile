@@ -26,18 +26,26 @@ RUN dpkg --add-architecture arm64 \
         libgstreamer-plugins-base1.0-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake ninja-build make \
+ && rm -rf /var/lib/apt/lists/*
+ENV CMAKE_GENERATOR=Ninja
+
 ENV PATH="/root/.cargo/bin:${PATH}"
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
     CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
     AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
-    PKG_CONFIG=aarch64-linux-gnu-pkg-config \
+    PKG_CONFIG=/usr/bin/pkg-config \
     PKG_CONFIG_ALLOW_CROSS=1 \
     PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
-    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
+    PKG_CONFIG_STATIC=1 \
+    PKG_CONFIG_ALL_STATIC=1 \
+    TURBOJPEG_STATIC=1
 
 RUN set -eux; \
-    aarch64-linux-gnu-pkg-config --modversion glib-2.0 | awk '{if($1<"2.56") exit 1}'; \
-    aarch64-linux-gnu-pkg-config --modversion gstreamer-1.0 | awk '{if($1<"1.14") exit 1}'; \
+    pkg-config --modversion glib-2.0 | awk '{if($1<"2.56") exit 1}'; \
+    pkg-config --modversion gstreamer-1.0 | awk '{if($1<"1.14") exit 1}'; \
     test -f /usr/lib/aarch64-linux-gnu/pkgconfig/gstreamer-app-1.0.pc; \
-    aarch64-linux-gnu-pkg-config --cflags --libs gstreamer-app-1.0 >/dev/null
+    pkg-config --cflags --libs gstreamer-app-1.0 >/dev/null;
