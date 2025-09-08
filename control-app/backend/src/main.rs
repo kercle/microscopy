@@ -64,11 +64,10 @@ impl AppState {
 }
 
 async fn produce_frames(tx: watch::Sender<Arc<Bytes>>, sink: gst_app::AppSink) {
-    let mut tj = Compressor::new().unwrap();
-
+    let mut tj = Compressor::new().expect("Failed to create TurboJPEG Compressor");
     let info = VideoInfo::builder(VideoFormat::I420, WIDTH, HEIGHT)
         .build()
-        .unwrap();
+        .expect("Failed to create VideoInfo");
 
     fn take_frame(
         sink: &gst_app::AppSink,
@@ -82,46 +81,43 @@ async fn produce_frames(tx: watch::Sender<Arc<Bytes>>, sink: gst_app::AppSink) {
 
         let frame = VideoFrameRef::from_buffer_ref_readable(buf, &info)?;
 
-        let strides = info.stride(); // -> &[i32; 4] in recent gstreamer-video
-        let sy = strides[0] as usize;
-        let su = strides[1] as usize;
-        let sv = strides[2] as usize;
+        let strides = info.stride();
+        let (sy, su, sv) = (
+            strides[0] as usize,
+            strides[1] as usize,
+            strides[2] as usize,
+        );
 
-        let w = info.width() as usize;
-        let h = info.height() as usize;
-        let cw = w / 2;
-        let ch = h / 2;
+        let (w, h) = (info.width() as usize, info.height() as usize);
+        let (cw, ch) = (w / 2, h / 2);
 
         let y = frame.plane_data(0).unwrap();
         let u = frame.plane_data(1).unwrap();
         let v = frame.plane_data(2).unwrap();
 
-        // Pack to a tight I420 buffer (align = 1)
         let mut yuv = Vec::with_capacity(w * h * 3 / 2);
 
-        // Y
         for row in 0..h {
             let s = row * sy;
             yuv.extend_from_slice(&y[s..s + w]);
         }
-        // U
+
         for row in 0..ch {
             let s = row * su;
             yuv.extend_from_slice(&u[s..s + cw]);
         }
-        // V
+
         for row in 0..ch {
             let s = row * sv;
             yuv.extend_from_slice(&v[s..s + cw]);
         }
 
-        // Describe the packed buffer and encode
         let yuv_img = YuvImage {
             pixels: yuv.as_slice(),
             width: w,
-            align: 1, // tightly packed rows
+            align: 1,
             height: h,
-            subsamp: Subsamp::Sub2x2, // I420 = 4:2:0
+            subsamp: Subsamp::Sub2x2,
         };
 
         tj.set_quality(80)?;
