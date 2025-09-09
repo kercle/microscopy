@@ -4,6 +4,8 @@ use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tracing::info;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use parameters::ParametersController;
 
@@ -12,19 +14,28 @@ mod control_app;
 mod handlers;
 mod parameters;
 
+fn init_tracing(app_state: &control_app::AppState) {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(app_state.clone())
+        .init();
+    tracing_gstreamer::integrate_events();
+    gstreamer::log::remove_default_log_function();
+}
+
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
-    info!("Starting control-app backend");
-
     let parameters_controller = ParametersController::new();
     let mut state_notify = parameters_controller.subscribe_changes();
 
     let (frame_tx, frame_rx) = watch::channel::<Arc<Bytes>>(Arc::new(Bytes::new()));
-    let app_state = control_app::AppState::new(frame_rx, parameters_controller)
+    let logs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+    let app_state = control_app::AppState::new(frame_rx, logs, parameters_controller)
         .await
         .unwrap();
-    let sink = app_state.get_sink();
+
+    init_tracing(&app_state);
+    info!("Starting control-app backend");
 
     let app_state_clone = app_state.clone();
     tokio::spawn(async move {
@@ -49,6 +60,7 @@ async fn main() {
         }
     });
 
+    let sink = app_state.get_sink();
     tokio::spawn(camera::produce_frames(frame_tx, sink));
 
     let api_routes = Router::new()

@@ -243,8 +243,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link 0.2.0",
 ]
 
@@ -264,6 +266,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
+ "chrono",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
@@ -280,6 +283,7 @@ dependencies = [
  "tokio-util",
  "tower-http",
  "tracing",
+ "tracing-gstreamer",
  "tracing-subscriber",
  "turbojpeg",
 ]
@@ -1900,6 +1904,19 @@ checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
  "valuable",
+]
+
+[[package]]
+name = "tracing-gstreamer"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e6f5fad39c887a86671900bb19329ca91360b455d2bfd5d007bfa9084cbf162"
+dependencies = [
+ "gstreamer",
+ "libc",
+ "thread_local",
+ "tracing",
+ "tracing-core",
 ]
 
 [[package]]

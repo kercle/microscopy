@@ -10,9 +10,18 @@ use tracing::warn;
 use crate::camera::{HEIGHT, WIDTH};
 use crate::parameters::ParametersController;
 
+const MAX_LOG_ENTRIES: usize = 200;
+
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: String,
+    pub message: String,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
+    logs: Arc<RwLock<Vec<LogEntry>>>,
     pipeline: gst::Pipeline,
     pub parameters_controller: Arc<RwLock<ParametersController>>,
 }
@@ -46,10 +55,12 @@ impl AppState {
 
     pub async fn new(
         frame_rx: watch::Receiver<Arc<Bytes>>,
+        logs: Arc<RwLock<Vec<LogEntry>>>,
         parameters: ParametersController,
     ) -> Result<AppState> {
         let app_state = AppState {
             frame_rx,
+            logs,
             pipeline: AppState::create_pipeline()?,
             parameters_controller: Arc::new(RwLock::new(parameters)),
         };
@@ -112,5 +123,51 @@ impl AppState {
     pub fn play_pipeline(&self) -> Result<()> {
         self.pipeline.set_state(gst::State::Playing)?;
         Ok(())
+    }
+}
+
+#[derive(Default)]
+struct EventFields {
+    message: Option<String>,
+    kv: Vec<(String, String)>,
+}
+
+impl tracing_subscriber::field::Visit for EventFields {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        let v = format!("{value:?}");
+        if field.name() == "message" {
+            self.message = Some(v.clone());
+        }
+        self.kv.push((field.name().to_string(), v));
+    }
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for AppState {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut event_fields = EventFields::default();
+        event.record(&mut event_fields);
+
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let level = format!("{}", event.metadata().level());
+        let message = event_fields.message.unwrap_or_default();
+
+        let logs = self.logs.clone();
+        tokio::spawn(async move {
+            let mut logs = logs.write().await;
+
+            if logs.len() >= MAX_LOG_ENTRIES {
+                logs.remove(0);
+            }
+
+            logs.push(LogEntry {
+                timestamp,
+                level,
+                message,
+            });
+        });
     }
 }
