@@ -19,6 +19,8 @@ impl Parameters {
                 sharpness: Some(0),
                 auto_white_balance: Some(true),
                 white_balance_mode: Some(crate::camera::WhiteBalanceMode::Auto),
+                color_gain_red: Some(1.0),
+                color_gain_blue: Some(1.0),
                 test_pattern: None,
             },
         }

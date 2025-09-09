@@ -1,13 +1,12 @@
 use std::fmt::Display;
 
+use anyhow::Result;
+use bytes::Bytes;
 use glib::Value as GValue;
 use gstreamer::glib;
 use gstreamer::prelude::GObjectExtManualGst;
+use gstreamer::prelude::ToSendValue;
 use gstreamer::{self as gst, glib::object::ObjectExt};
-// use glib::{object::ObjectExt, translate::ToGlibPtr};
-// use gstreamer::{prelude::GObjectExtManualGst};
-use anyhow::Result;
-use bytes::Bytes;
 use gstreamer_app as gst_app;
 use gstreamer_video::{VideoFormat, VideoFrameRef, VideoInfo};
 use serde::{Deserialize, Serialize};
@@ -30,6 +29,8 @@ pub struct CameraProperties {
     pub sharpness: Option<i32>,
     pub auto_white_balance: Option<bool>,
     pub white_balance_mode: Option<WhiteBalanceMode>,
+    pub color_gain_red: Option<f32>,
+    pub color_gain_blue: Option<f32>,
     pub test_pattern: Option<TestPattern>,
 }
 
@@ -131,13 +132,10 @@ impl CameraProperties {
         {
             source.set_property_from_str("awb-mode", &v.to_string());
         }
-
-        // if let Some(v) = self.sharpness && source.has_property("sharpness") {
-        //     source.set_property("sharpness", v);
-        // }
-        // if let Some(v) = self.awb_enable && source.has_property("awb-enable") {
-        //     source.set_property("awb-enable", v);
-        // }
+        if let (Some(r), Some(b)) = (self.color_gain_red, self.color_gain_blue) {
+            let gains = gst::Array::from_iter([r.to_send_value(), b.to_send_value()]);
+            source.set_property("colour-gains", gains);
+        }
         if let Some(v) = &self.test_pattern
             && source.has_property("pattern")
         {
@@ -198,6 +196,18 @@ impl CameraProperties {
         }
         if let Some(v) = &other.test_pattern {
             self.test_pattern = Some(v.clone());
+            changes += 1;
+        }
+        if let Some(r) = other.color_gain_red
+            && self.color_gain_red != other.color_gain_red
+        {
+            self.color_gain_red = Some(r);
+            changes += 1;
+        }
+        if let Some(b) = other.color_gain_blue
+            && self.color_gain_blue != other.color_gain_blue
+        {
+            self.color_gain_blue = Some(b);
             changes += 1;
         }
 

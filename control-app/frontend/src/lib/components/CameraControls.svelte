@@ -8,6 +8,8 @@
 		saturation?: number;
 		auto_white_balance?: boolean;
 		white_balance_mode?: string;
+		color_gain_red?: number;
+		color_gain_blue?: number;
 	};
 
 	let camera_properties: CameraProperties = $state({});
@@ -112,4 +114,22 @@
 			<option value="custom">Custom</option>
 		</select>
 	</div>
+
+	<SliderWithTextbox
+		label="Red Gain"
+		value={camera_properties.color_gain_red}
+		min={0}
+		max={5}
+		step={0.01}
+		onChange={(v: number) => updateParam(v, 'color_gain_red')}
+	/>
+
+	<SliderWithTextbox
+		label="Blue Gain"
+		value={camera_properties.color_gain_blue}
+		min={0}
+		max={5}
+		step={0.01}
+		onChange={(v: number) => updateParam(v, 'color_gain_blue')}
+	/>
 </div>
