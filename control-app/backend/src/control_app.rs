@@ -5,7 +5,7 @@ use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
 use std::sync::Arc;
-use tokio::sync::{RwLock, watch};
+use tokio::sync::{RwLock, broadcast, watch};
 use tracing::warn;
 
 use crate::camera::{HEIGHT, WIDTH};
@@ -23,8 +23,11 @@ pub struct LogEntry {
 #[derive(Clone)]
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
+    logs_tx: broadcast::Sender<LogEntry>,
+
     pipeline: gst::Pipeline,
     logs: Arc<RwLock<Vec<LogEntry>>>,
+
     pub parameters_controller: Arc<RwLock<ParametersController>>,
 }
 
@@ -60,8 +63,11 @@ impl AppState {
         logs: Arc<RwLock<Vec<LogEntry>>>,
         parameters: ParametersController,
     ) -> Result<AppState> {
+        let (logs_tx, _logs_rx) = broadcast::channel(MAX_LOG_ENTRIES);
+
         let app_state = AppState {
             frame_rx,
+            logs_tx,
             logs,
             pipeline: AppState::create_pipeline()?,
             parameters_controller: Arc::new(RwLock::new(parameters)),
@@ -131,6 +137,10 @@ impl AppState {
         let l = self.logs.read().await;
         Vec::from_iter(l.iter().cloned())
     }
+
+    pub async fn subscribe_to_logs(&self) -> broadcast::Receiver<LogEntry> {
+        self.logs_tx.subscribe()
+    }
 }
 
 #[derive(Default)]
@@ -163,18 +173,23 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for AppState {
         let message = event_fields.message.unwrap_or_default();
 
         let logs = self.logs.clone();
+        let logs_tx = self.logs_tx.clone();
+
+        let logs_entry = LogEntry {
+            timestamp,
+            level,
+            message,
+        };
+
+        let _ = logs_tx.send(logs_entry.clone());
+
         tokio::spawn(async move {
             let mut logs = logs.write().await;
 
             if logs.len() >= MAX_LOG_ENTRIES {
                 logs.remove(0);
             }
-
-            logs.push(LogEntry {
-                timestamp,
-                level,
-                message,
-            });
+            logs.push(logs_entry);
         });
     }
 }

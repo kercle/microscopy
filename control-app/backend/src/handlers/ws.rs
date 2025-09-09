@@ -5,10 +5,13 @@ use axum::{
     extract::ws::{WebSocket, WebSocketUpgrade},
 };
 use serde_json::json;
+use tracing::info;
 
 use crate::control_app::AppState;
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
+    info!("New WebSocket connection");
+
     ws.on_upgrade(async move |socket| {
         if let Err(err) = handle_socket(socket, app).await {
             eprintln!("Error handling WebSocket: {}", err);
@@ -51,6 +54,8 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
         p.subscribe_changes()
     };
 
+    let mut log_rx = app.subscribe_to_logs().await;
+
     let params_json = {
         let p = app.parameters_controller.read().await;
         serde_json::to_string(&p.parameters).unwrap()
@@ -90,9 +95,14 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
                 let params = rx.borrow_and_update().clone();
 
                 let params_json = serde_json::to_string(&params).unwrap();
-                if socket.send(axum::extract::ws::Message::Text(params_json.into())).await.is_err() {
-                    break;
-                }
+                socket.send(axum::extract::ws::Message::Text(params_json.into())).await?;
+            }
+            Ok(log_msg) = log_rx.recv() => {
+                let msg = serde_json::to_string(&json!({
+                    "logs": log_msg
+                }));
+
+                socket.send(axum::extract::ws::Message::Text(msg.unwrap().into())).await?;
             }
         }
     }
