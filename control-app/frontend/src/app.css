@@ -1,4 +1,13 @@
 @import 'tailwindcss';
+
 @plugin "daisyui" {
 	themes: all;
+}
+
+html {
+	scrollbar-gutter: stable;
+}
+
+body {
+	overflow: hidden;
 }

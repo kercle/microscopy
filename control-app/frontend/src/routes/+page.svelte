@@ -2,6 +2,7 @@
 	import { connect } from '$lib/syncSocket';
 
 	import CameraControls from '$lib/components/CameraControls.svelte';
+	import Drawer from '$lib/icons/Drawer.svelte';
 
 	let ws: WebSocket | null = $state(null);
 
@@ -18,29 +19,21 @@
 <div class="drawer drawer-end lg:drawer-open">
 	<input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
 	<div class="drawer-content flex flex-col items-center justify-center">
-		<div class="navbar bg-base-100 shadow-sm lg:hidden">
-			<div class="flex-1"></div>
-			<div class="flex-none justify-end">
-				<label for="my-drawer-2" class="btn btn-ghost drawer-button">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						class="inline-block h-5 w-5 stroke-current"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M4 6h16M4 12h16M4 18h16"
-						></path>
-					</svg>
-				</label>
+		<div class="tabs tabs-border h-full w-full">
+			<input type="radio" name="main-tabs" class="tab ml-2" aria-label="Live" checked />
+			<div class="tab-content bg-base-100 border-t-base-300 p-6">
+				<img src="/api/stream" alt="Microscope camera stream" class="w-full rounded-md" />
 			</div>
+			<input type="radio" name="main-tabs" class="tab" aria-label="Journal" />
+			<div class="tab-content bg-base-100 border-base-300 p-6">Content 2</div>
+
+			<div class="flex-1"></div>
+			<label for="my-drawer-2" class="btn btn-ghost drawer-button lg:hidden">
+				<Drawer />
+			</label>
 		</div>
-		<img src="/api/stream" alt="Microscope camera stream" />
 	</div>
-	<div class="drawer-side">
+	<div class="drawer-side border-l-base-300 border-l">
 		<label for="my-drawer-2" aria-label="close sidebar" class="drawer-overlay"></label>
 		<ul class="menu bg-base-200 text-base-content w-100 min-h-full p-4">
 			<div class="card bg-base-100 shadow-sm">
