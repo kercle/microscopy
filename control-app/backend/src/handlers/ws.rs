@@ -4,7 +4,7 @@ use axum::{
     extract::ws::{WebSocket, WebSocketUpgrade},
 };
 
-use crate::AppState;
+use crate::control_app::AppState;
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, app))
@@ -15,7 +15,7 @@ async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
         axum::extract::ws::Message::Text(text) => {
             println!("Received text message: {}", text);
             // Handle text message
-            if let Ok(new_params) = serde_json::from_str::<crate::Parameters>(&text) {
+            if let Ok(new_params) = serde_json::from_str::<crate::parameters::Parameters>(&text) {
                 let mut p = app.parameters_controller.write().await;
                 p.patch(&new_params);
             } else {

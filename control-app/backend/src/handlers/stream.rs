@@ -1,7 +1,7 @@
 use axum::{body::Body, response::IntoResponse};
 use http::{HeaderValue, Response};
 
-use crate::AppState;
+use crate::control_app::AppState;
 
 pub async fn get_stream_mjpeg(
     axum::extract::State(state): axum::extract::State<AppState>,
@@ -9,7 +9,7 @@ pub async fn get_stream_mjpeg(
     let boundary = "microscope-video-frame";
     let content_type = format!("multipart/x-mixed-replace; boundary={boundary}");
 
-    let mut rx = state.frame_rx.clone();
+    let mut rx = state.subscribe_to_frames();
     let (body_tx, body_rx) =
         tokio::sync::mpsc::channel::<Result<axum::body::Bytes, anyhow::Error>>(5);
 

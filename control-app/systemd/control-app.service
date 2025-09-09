@@ -1,0 +1,10 @@
+[Unit]
+Description=Camera App Service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/control-app serve
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

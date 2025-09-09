@@ -1,0 +1,116 @@
+use anyhow::{Result, anyhow};
+use bytes::Bytes;
+use gstreamer as gst;
+use gstreamer::prelude::*;
+use gstreamer_app as gst_app;
+use std::sync::Arc;
+use tokio::sync::{RwLock, watch};
+use tracing::warn;
+
+use crate::camera::{HEIGHT, WIDTH};
+use crate::parameters::ParametersController;
+
+#[derive(Clone)]
+pub struct AppState {
+    frame_rx: watch::Receiver<Arc<Bytes>>,
+    pipeline: gst::Pipeline,
+    pub parameters_controller: Arc<RwLock<ParametersController>>,
+}
+
+impl AppState {
+    fn pipeline_string() -> String {
+        let source_element = if cfg!(target_arch = "aarch64") {
+            "libcamerasrc name=source exposure-time-mode=manual exposure-time=4000"
+        } else {
+            "videotestsrc name=source is-live=true pattern=smpte"
+        };
+
+        format!(
+            "{source_element}
+            ! video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=20/1
+            ! queue max-size-buffers=1 leaky=downstream
+            ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
+        )
+    }
+
+    fn create_pipeline() -> Result<gst::Pipeline> {
+        let pipeline_string = AppState::pipeline_string();
+
+        gst::init()?;
+        let pipeline = gst::parse::launch(&pipeline_string)?
+            .downcast::<gst::Pipeline>()
+            .map_err(|e| anyhow!("Launching pipeline failed: {}", e.type_().name()))?;
+
+        Ok(pipeline)
+    }
+
+    pub async fn new(
+        frame_rx: watch::Receiver<Arc<Bytes>>,
+        parameters: ParametersController,
+    ) -> Result<AppState> {
+        let app_state = AppState {
+            frame_rx,
+            pipeline: AppState::create_pipeline()?,
+            parameters_controller: Arc::new(RwLock::new(parameters)),
+        };
+
+        app_state.set_awb_enable(true);
+        app_state.play_pipeline()?;
+
+        Ok(app_state)
+    }
+
+    pub async fn update_from_bytes(&self, bytes: Bytes) -> Result<()> {
+        let tf = tempfile::NamedTempFile::new()?;
+        std::fs::write(tf.path(), &bytes)?;
+
+        if cfg!(debug_assertions) {
+            warn!("Self-update called in debug build, skipping actual update");
+            return Ok(());
+        } else {
+            self_replace::self_replace(tf.path())?;
+
+            const EXIT_DELAY: u64 = 2;
+            warn!("Exiting in {EXIT_DELAY} seconds. Restarting needs to be handled externally.");
+            tokio::spawn(async {
+                tokio::time::sleep(std::time::Duration::from_secs(EXIT_DELAY)).await;
+                std::process::exit(0);
+            });
+        }
+
+        Ok(())
+    }
+
+    pub fn subscribe_to_frames(&self) -> watch::Receiver<Arc<Bytes>> {
+        self.frame_rx.clone()
+    }
+
+    pub fn get_source(&self) -> gst::Element {
+        self.pipeline.by_name("source").unwrap()
+    }
+
+    pub fn get_sink(&self) -> gst_app::AppSink {
+        self.pipeline
+            .by_name("sink")
+            .unwrap()
+            .downcast::<gst_app::AppSink>()
+            .unwrap()
+    }
+
+    fn set_awb_enable(&self, enable: bool) {
+        if cfg!(not(debug_assertions)) {
+            let source = self.get_source();
+            source.set_property("awb-enable", enable);
+        }
+    }
+
+    pub fn stop_pipeline(&self) -> Result<()> {
+        self.pipeline.set_state(gst::State::Null)?;
+        Ok(())
+    }
+
+    pub fn play_pipeline(&self) -> Result<()> {
+        self.pipeline.set_state(gst::State::Playing)?;
+        Ok(())
+    }
+}
