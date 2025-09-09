@@ -6,6 +6,8 @@
 		brightness?: number;
 		contrast?: number;
 		saturation?: number;
+		auto_white_balance?: boolean;
+		white_balance_mode?: string;
 	};
 
 	let camera_properties: CameraProperties = $state({});
@@ -35,7 +37,7 @@
 		);
 	};
 
-	const updateParam = (value: number, param: string) => {
+	const updateParam = (value: any, param: string) => {
 		camera_properties[param as keyof CameraProperties] = value;
 
 		if (debounce_timeout) {
@@ -82,4 +84,32 @@
 		step={0.01}
 		onChange={(v: number) => updateParam(v, 'saturation')}
 	/>
+
+	<div class="mt-3 flex">
+		<span class="flex-grow">Auto White Balance</span>
+		<input
+			type="checkbox"
+			checked={camera_properties.auto_white_balance}
+			class="toggle toggle-sm flex-none"
+			onchange={(e) => updateParam((e.target as HTMLInputElement).checked, 'auto_white_balance')}
+		/>
+	</div>
+
+	<div class="mt-3 flex flex-col">
+		<div class="flex-grow">White Balance Mode:</div>
+		<select
+			class="select select-ghost mt-2"
+			bind:value={camera_properties.white_balance_mode}
+			onchange={(e) => updateParam((e.target as HTMLSelectElement).value, 'white_balance_mode')}
+		>
+			<option value="auto">Auto</option>
+			<option value="incandescent">Incandescent</option>
+			<option value="tungsten">Tungsten</option>
+			<option value="fluorescent">Fluorescent</option>
+			<option value="indoor">Indoor</option>
+			<option value="daylight">Daylight</option>
+			<option value="cloudy">Cloudy</option>
+			<option value="custom">Custom</option>
+		</select>
+	</div>
 </div>

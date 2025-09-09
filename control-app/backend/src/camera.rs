@@ -28,8 +28,37 @@ pub struct CameraProperties {
     pub contrast: Option<f32>,
     pub saturation: Option<f32>,
     pub sharpness: Option<i32>,
-    pub awb_enable: Option<bool>,
+    pub auto_white_balance: Option<bool>,
+    pub white_balance_mode: Option<WhiteBalanceMode>,
     pub test_pattern: Option<TestPattern>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum WhiteBalanceMode {
+    Auto = 0,
+    Incandescent = 1,
+    Tungsten = 2,
+    Fluorescent = 3,
+    Indoor = 4,
+    Daylight = 5,
+    Cloudy = 6,
+    Custom = 7,
+}
+
+impl Display for WhiteBalanceMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WhiteBalanceMode::Auto => write!(f, "auto"),
+            WhiteBalanceMode::Incandescent => write!(f, "incandescent"),
+            WhiteBalanceMode::Tungsten => write!(f, "tungsten"),
+            WhiteBalanceMode::Fluorescent => write!(f, "fluorescent"),
+            WhiteBalanceMode::Indoor => write!(f, "indoor"),
+            WhiteBalanceMode::Daylight => write!(f, "daylight"),
+            WhiteBalanceMode::Cloudy => write!(f, "cloudy"),
+            WhiteBalanceMode::Custom => write!(f, "custom"),
+        }
+    }
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -69,59 +98,110 @@ impl Display for TestPattern {
 
 impl CameraProperties {
     pub fn write_to_source(&self, source: &gst::Element) {
-
-
-        if let Some(v) = self.exposure_time && source.has_property("exposure-time") {
+        if let Some(v) = self.exposure_time
+            && source.has_property("exposure-time")
+        {
             source.set_property("exposure-time", v as i32);
         }
         // if let Some(v) = self.gain && source.has_property("gain") {
         //     source.set_property("gain", v);
         // }
-        if let Some(v) = self.brightness && source.has_property("brightness") {
+        if let Some(v) = self.brightness
+            && source.has_property("brightness")
+        {
             source.set_property("brightness", v);
         }
-        if let Some(v) = self.contrast && source.has_property("contrast") {
+        if let Some(v) = self.contrast
+            && source.has_property("contrast")
+        {
             source.set_property("contrast", v);
         }
-        if let Some(v) = self.saturation && source.has_property("saturation") {
+        if let Some(v) = self.saturation
+            && source.has_property("saturation")
+        {
             source.set_property("saturation", v);
         }
+        if let Some(v) = self.auto_white_balance
+            && source.has_property("awb-enable")
+        {
+            source.set_property("awb-enable", v);
+        }
+        if let Some(v) = &self.white_balance_mode
+            && source.has_property("awb-mode")
+        {
+            source.set_property_from_str("awb-mode", &v.to_string());
+        }
+
         // if let Some(v) = self.sharpness && source.has_property("sharpness") {
         //     source.set_property("sharpness", v);
         // }
         // if let Some(v) = self.awb_enable && source.has_property("awb-enable") {
         //     source.set_property("awb-enable", v);
         // }
-        if let Some(v) = &self.test_pattern && source.has_property("pattern") {
+        if let Some(v) = &self.test_pattern
+            && source.has_property("pattern")
+        {
             source.set_property_from_str("pattern", &v.to_string());
         }
     }
 
-    pub fn patch(&mut self, other: &Self) {
-        if let Some(v) = other.exposure_time {
+    pub fn patch(&mut self, other: &Self) -> usize {
+        let mut changes = 0;
+
+        if let Some(v) = other.exposure_time
+            && self.exposure_time != other.exposure_time
+        {
             self.exposure_time = Some(v);
+            changes += 1;
         }
-        if let Some(v) = other.gain {
+        if let Some(v) = other.gain
+            && self.gain != other.gain
+        {
             self.gain = Some(v);
+            changes += 1;
         }
-        if let Some(v) = other.brightness {
+        if let Some(v) = other.brightness
+            && self.brightness != other.brightness
+        {
             self.brightness = Some(v);
+            changes += 1;
         }
-        if let Some(v) = other.contrast {
+        if let Some(v) = other.contrast
+            && self.contrast != other.contrast
+        {
             self.contrast = Some(v);
+            changes += 1;
         }
-        if let Some(v) = other.saturation {
+        if let Some(v) = other.saturation
+            && self.saturation != other.saturation
+        {
             self.saturation = Some(v);
+            changes += 1;
         }
-        if let Some(v) = other.sharpness {
+        if let Some(v) = other.sharpness
+            && self.sharpness != other.sharpness
+        {
             self.sharpness = Some(v);
+            changes += 1;
         }
-        if let Some(v) = other.awb_enable {
-            self.awb_enable = Some(v);
+        if let Some(v) = other.auto_white_balance
+            && self.auto_white_balance != other.auto_white_balance
+        {
+            self.auto_white_balance = Some(v);
+            changes += 1;
+        }
+        if let Some(v) = &other.white_balance_mode
+            && self.white_balance_mode.as_ref() != Some(v)
+        {
+            self.white_balance_mode = Some(v.clone());
+            changes += 1;
         }
         if let Some(v) = &other.test_pattern {
             self.test_pattern = Some(v.clone());
+            changes += 1;
         }
+
+        changes
     }
 }
 

@@ -1,6 +1,6 @@
+use crate::camera::CameraProperties;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
-use crate::camera::CameraProperties;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Parameters {
@@ -17,14 +17,15 @@ impl Parameters {
                 contrast: Some(0.0),
                 saturation: Some(0.0),
                 sharpness: Some(0),
-                awb_enable: Some(true),
+                auto_white_balance: Some(true),
+                white_balance_mode: Some(crate::camera::WhiteBalanceMode::Auto),
                 test_pattern: None,
             },
         }
     }
 
-    fn patch(&mut self, other: &Self) {
-        self.camera_properties.patch(&other.camera_properties);
+    fn patch(&mut self, other: &Self) -> usize {
+        self.camera_properties.patch(&other.camera_properties)
     }
 }
 
@@ -48,7 +49,10 @@ impl ParametersController {
     }
 
     pub fn patch(&mut self, other: &Parameters) {
-        self.parameters.patch(&other);
-        let _ = self.notify_channel.send(self.parameters.clone());
+        let changes = self.parameters.patch(&other);
+
+        if changes > 0 {
+            let _ = self.notify_channel.send(self.parameters.clone());
+        }
     }
 }
