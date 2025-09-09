@@ -104,9 +104,6 @@ impl CameraProperties {
         {
             source.set_property("exposure-time", v as i32);
         }
-        // if let Some(v) = self.gain && source.has_property("gain") {
-        //     source.set_property("gain", v);
-        // }
         if let Some(v) = self.brightness
             && source.has_property("brightness")
         {
@@ -132,7 +129,9 @@ impl CameraProperties {
         {
             source.set_property_from_str("awb-mode", &v.to_string());
         }
-        if let (Some(r), Some(b)) = (self.color_gain_red, self.color_gain_blue) {
+        if let (Some(r), Some(b)) = (self.color_gain_red, self.color_gain_blue)
+            && source.has_property("colour-gains")
+        {
             let gains = gst::Array::from_iter([r.to_send_value(), b.to_send_value()]);
             source.set_property("colour-gains", gains);
         }

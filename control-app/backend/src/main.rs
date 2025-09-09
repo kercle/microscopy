@@ -4,8 +4,7 @@ use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tracing::info;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use parameters::ParametersController;
 
@@ -16,6 +15,7 @@ mod parameters;
 
 fn init_tracing(app_state: &control_app::AppState) {
     tracing_subscriber::registry()
+        .with(EnvFilter::new("info"))
         .with(tracing_subscriber::fmt::layer())
         .with(app_state.clone())
         .init();
@@ -51,7 +51,6 @@ async fn main() {
 
                     let params = state_notify.borrow_and_update();
 
-                    println!("Parameters changed, updating camera properties");
                     app_state.stop_pipeline().unwrap();
                     params.camera_properties.write_to_source(&app_state.get_source());
                     app_state.play_pipeline().unwrap();

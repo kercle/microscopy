@@ -1,20 +1,24 @@
+use anyhow::Result;
 use axum::response::IntoResponse;
 use axum::{
     extract::State,
     extract::ws::{WebSocket, WebSocketUpgrade},
 };
+use serde_json::json;
 
 use crate::control_app::AppState;
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, app))
+    ws.on_upgrade(async move |socket| {
+        if let Err(err) = handle_socket(socket, app).await {
+            eprintln!("Error handling WebSocket: {}", err);
+        }
+    })
 }
 
 async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
     match msg {
         axum::extract::ws::Message::Text(text) => {
-            println!("Received text message: {}", text);
-            // Handle text message
             if let Ok(new_params) = serde_json::from_str::<crate::parameters::Parameters>(&text) {
                 let mut p = app.parameters_controller.write().await;
                 p.patch(&new_params);
@@ -41,7 +45,7 @@ async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
     }
 }
 
-async fn handle_socket(mut socket: WebSocket, mut app: AppState) {
+async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
     let mut rx = {
         let p = app.parameters_controller.read().await;
         p.subscribe_changes()
@@ -52,13 +56,17 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) {
         serde_json::to_string(&p.parameters).unwrap()
     };
 
-    if socket
+    socket
         .send(axum::extract::ws::Message::Text(params_json.into()))
-        .await
-        .is_err()
-    {
-        return;
-    }
+        .await?;
+
+    let msg = serde_json::to_string(&json!({
+        "logs": app.get_logs().await
+    }));
+
+    socket
+        .send(axum::extract::ws::Message::Text(msg.unwrap().into()))
+        .await?;
 
     loop {
         tokio::select! {
@@ -88,4 +96,6 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) {
             }
         }
     }
+
+    Ok(())
 }

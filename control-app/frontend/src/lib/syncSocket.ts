@@ -10,6 +10,7 @@ export const connect = (onmsg_callback: (msg: any) => void) : WebSocket => {
     };
 
     ws.onmessage = (ev) => {
+        console.log('WS message', ev.data);
         onmsg_callback(ev);
     };
 

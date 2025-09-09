@@ -3,6 +3,7 @@ use bytes::Bytes;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
+use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::{RwLock, watch};
 use tracing::warn;
@@ -12,6 +13,7 @@ use crate::parameters::ParametersController;
 
 const MAX_LOG_ENTRIES: usize = 200;
 
+#[derive(Clone, Serialize)]
 pub struct LogEntry {
     pub timestamp: String,
     pub level: String,
@@ -21,8 +23,8 @@ pub struct LogEntry {
 #[derive(Clone)]
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
-    logs: Arc<RwLock<Vec<LogEntry>>>,
     pipeline: gst::Pipeline,
+    logs: Arc<RwLock<Vec<LogEntry>>>,
     pub parameters_controller: Arc<RwLock<ParametersController>>,
 }
 
@@ -123,6 +125,11 @@ impl AppState {
     pub fn play_pipeline(&self) -> Result<()> {
         self.pipeline.set_state(gst::State::Playing)?;
         Ok(())
+    }
+
+    pub async fn get_logs(&self) -> Vec<LogEntry> {
+        let l = self.logs.read().await;
+        Vec::from_iter(l.iter().cloned())
     }
 }
 
