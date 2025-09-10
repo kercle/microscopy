@@ -5,7 +5,7 @@ use axum::{
     extract::ws::{WebSocket, WebSocketUpgrade},
 };
 use serde_json::json;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::control_app::AppState;
 
@@ -26,23 +26,19 @@ async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
                 let mut p = app.parameters_controller.write().await;
                 p.patch(&new_params);
             } else {
-                eprintln!("Failed to parse parameters from text message");
+                error!("Failed to parse parameters from text message");
             }
         }
-        axum::extract::ws::Message::Binary(bin) => {
-            println!("Received binary message: {:?}", bin);
+        axum::extract::ws::Message::Binary(_bin) => {
             // Handle binary message
         }
-        axum::extract::ws::Message::Close(close_frame) => {
-            println!("Received close message: {:?}", close_frame);
+        axum::extract::ws::Message::Close(_close_frame) => {
             // Handle close message
         }
-        axum::extract::ws::Message::Ping(ping) => {
-            println!("Received ping: {:?}", ping);
+        axum::extract::ws::Message::Ping(_ping) => {
             // Handle ping
         }
-        axum::extract::ws::Message::Pong(pong) => {
-            println!("Received pong: {:?}", pong);
+        axum::extract::ws::Message::Pong(_pong) => {
             // Handle pong
         }
     }
@@ -87,11 +83,7 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
                     None => break, // Connection closed
                 }
             }
-            res = rx.changed() => {
-                if res.is_err() {
-                    break; // Sender dropped
-                }
-
+            Ok(_) = rx.changed() => {
                 let params = rx.borrow_and_update().clone();
 
                 let params_json = serde_json::to_string(&params).unwrap();
@@ -99,7 +91,7 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
             }
             Ok(log_msg) = log_rx.recv() => {
                 let msg = serde_json::to_string(&json!({
-                    "logs": log_msg
+                    "logs": [log_msg]
                 }));
 
                 socket.send(axum::extract::ws::Message::Text(msg.unwrap().into())).await?;

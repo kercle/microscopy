@@ -16,9 +16,7 @@
 
 	let { ws = null }: { ws: WebSocket | null } = $props();
 
-	export const update = (event: MessageEvent) => {
-		let data = JSON.parse(event.data);
-
+	export const update = (data: any) => {
 		if (data.camera_properties) {
 			camera_properties = { ...camera_properties, ...data.camera_properties };
 		}

@@ -3,14 +3,26 @@
 
 	import CameraControls from '$lib/components/CameraControls.svelte';
 	import Drawer from '$lib/icons/Drawer.svelte';
+	import LogsJournal from '$lib/components/LogsJournal.svelte';
+	import type { LogMessage } from '$lib';
+	import Live from '$lib/icons/Live.svelte';
+	import Journal from '$lib/icons/Journal.svelte';
 
 	let ws: WebSocket | null = $state(null);
+	let log_messages: LogMessage[] = $state([]);
 
 	let camera_controls_ref: CameraControls;
+	let logs_journal_ref: LogsJournal;
 
 	$effect(() => {
 		ws = connect((event: MessageEvent) => {
-			camera_controls_ref.update(event);
+			let data = JSON.parse(event.data);
+
+			camera_controls_ref.update(data);
+			if (data.logs) {
+				console.log('Received logs', data.logs);
+				logs_journal_ref.addLogMessages(data.logs);
+			}
 		});
 		return () => ws?.close();
 	});
@@ -20,13 +32,27 @@
 	<input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
 	<div class="drawer-content flex flex-col items-center justify-center">
 		<div class="tabs tabs-border h-full w-full">
-			<input type="radio" name="main-tabs" class="tab ml-2" aria-label="Live" checked />
+			<!-- Tab 1: Live -->
+			<label class="tab">
+				<input type="radio" name="main-tabs" checked />
+				<Live />
+				Live
+			</label>
 			<div class="tab-content bg-base-100 border-t-base-300 p-6">
 				<img src="/api/stream" alt="Microscope camera stream" class="w-full rounded-md" />
 			</div>
-			<input type="radio" name="main-tabs" class="tab" aria-label="Journal" />
-			<div class="tab-content bg-base-100 border-base-300 p-6">Content 2</div>
 
+			<!-- Tab 2: Journal -->
+			<label class="tab">
+				<input type="radio" name="main-tabs" />
+				<Journal />
+				Journal
+			</label>
+			<div class="tab-content bg-base-100 p-6">
+				<LogsJournal bind:this={logs_journal_ref} />
+			</div>
+
+			<!-- Drawer toggle button -->
 			<div class="flex-1"></div>
 			<label for="my-drawer-2" class="btn btn-ghost drawer-button lg:hidden">
 				<Drawer />
