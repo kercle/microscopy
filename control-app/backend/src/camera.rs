@@ -214,49 +214,6 @@ impl CameraProperties {
     }
 }
 
-// Getting camera properties:
-//     let source = state.get_source();
-
-//     if !source.has_property(name.as_str()) {
-//         return Response::builder()
-//             .status(404)
-//             .header("Cache-Control", "no-cache")
-//             .header("Pragma", "no-cache")
-//             .body(Body::from(format!("Property '{name}' not found")))
-//             .unwrap();
-//     }
-
-//     source.set_property_from_str(name.as_str(), format!("{property}").as_str());
-
-// Setting camera properties:
-// let source = state.get_source();
-
-// if !source.has_property(name.as_str()) {
-//     return Response::builder()
-//         .status(404)
-//         .header("Cache-Control", "no-cache")
-//         .header("Pragma", "no-cache")
-//         .body(Body::from(format!("Property '{name}' not found")))
-//         .unwrap();
-// }
-
-// let gt = source.property_type(name.as_str()).map(|t| t.name());
-// let gv = source.property_value(name.as_str());
-
-// let (status, body) = match gt {
-//     Some("GstVideoTestSrcPattern") => {
-//         let value = CameraProperty::TestPattern(TestPattern::from(unsafe {
-//             glib::gobject_ffi::g_value_get_enum(gv.to_glib_none().0)
-//         }));
-//         (200, serde_json::to_string(&value).unwrap())
-//     }
-//     Some(t) => (
-//         500,
-//         format!("Property '{name}' has unsupported type '{t:?}'"),
-//     ),
-//     None => (500, format!("Property '{name}' has unknown type")),
-// };
-
 pub async fn produce_frames(tx: watch::Sender<Arc<Bytes>>, sink: gst_app::AppSink) {
     let mut tj = Compressor::new().expect("Failed to create TurboJPEG Compressor");
     let info = VideoInfo::builder(VideoFormat::I420, WIDTH, HEIGHT)

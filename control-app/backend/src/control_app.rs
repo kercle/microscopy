@@ -34,7 +34,13 @@ pub struct AppState {
 impl AppState {
     fn pipeline_string() -> String {
         let source_element = if cfg!(target_arch = "aarch64") {
-            "libcamerasrc name=source exposure-time-mode=manual exposure-time=4000"
+            "libcamerasrc name=source 
+                exposure-time-mode=manual
+                exposure-time=4000
+                awb-enable=true
+                awb-mode=daylight
+                contrast=1.0
+                saturation=1.0"
         } else {
             "videotestsrc name=source is-live=true pattern=smpte"
         };
