@@ -8,8 +8,8 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast, watch};
 use tracing::warn;
 
-use crate::camera::{HEIGHT, WIDTH};
-use crate::parameters::ParametersController;
+use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
+use crate::parameters::{Parameters, ParametersController};
 
 const MAX_LOG_ENTRIES: usize = 200;
 
@@ -32,7 +32,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    fn pipeline_string() -> String {
+    fn video_pipeline_string(width: u32, height: u32) -> String {
         let source_element = if cfg!(target_arch = "aarch64") {
             "libcamerasrc name=source 
                 exposure-time-mode=manual
@@ -47,14 +47,45 @@ impl AppState {
 
         format!(
             "{source_element}
-            ! video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=20/1
+            ! video/x-raw,format=I420,width={width},height={height},framerate=20/1
             ! queue max-size-buffers=1 leaky=downstream
             ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
         )
     }
 
+    fn photo_pipeline_string(width: u32, height: u32, parameters: &Parameters) -> String {
+        let source_element = if cfg!(target_arch = "aarch64") {
+            #[allow(unused_variables)]
+            let exposure_time = parameters.camera_properties.exposure_time.unwrap_or(4000);
+
+            #[allow(unused_variables)]
+            let contrast = parameters.camera_properties.contrast.unwrap_or(1.0);
+
+            #[allow(unused_variables)]
+            let saturation = parameters.camera_properties.saturation.unwrap_or(1.0);
+
+            format!("libcamerasrc name=source 
+                exposure-time-mode=manual
+                exposure-time={exposure_time}
+                awb-enable=true
+                awb-mode=daylight
+                contrast={contrast}
+                saturation={saturation}")
+        } else {
+            "videotestsrc name=source is-live=true pattern=smpte".to_string()
+        };
+
+        format!(
+            "{source_element}
+            ! video/x-raw,format=I420,width={width},height={height},framerate=10/1
+            ! queue max-size-buffers=1 leaky=downstream
+            ! jpegenc
+            ! appsink name=sink emit-signals=false sync=false drop=true max-buffers=1 enable-last-sample=false"
+        )
+    }
+
     fn create_pipeline() -> Result<gst::Pipeline> {
-        let pipeline_string = AppState::pipeline_string();
+        let pipeline_string = AppState::video_pipeline_string(STREAM_WIDTH, STREAM_HEIGHT);
 
         gst::init()?;
         let pipeline = gst::parse::launch(&pipeline_string)?
@@ -146,6 +177,45 @@ impl AppState {
 
     pub async fn subscribe_to_logs(&self) -> broadcast::Receiver<LogEntry> {
         self.logs_tx.subscribe()
+    }
+
+    pub async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
+        self.stop_pipeline()?;
+
+        let pipeline_string =
+            AppState::photo_pipeline_string(PHOTO_WIDTH, PHOTO_HEIGHT, parameters);
+        let photo_pipeline = gst::parse::launch(&pipeline_string)?
+            .downcast::<gst::Pipeline>()
+            .map_err(|e| anyhow!("Launching photo pipeline failed: {}", e.type_().name()))?;
+
+        photo_pipeline.set_state(gst::State::Playing)?;
+
+        let appsink = photo_pipeline
+            .by_name("sink")
+            .unwrap()
+            .downcast::<gst_app::AppSink>()
+            .unwrap();
+
+        let mut sample = appsink.pull_sample()?;
+
+        for _ in 0..5 {
+            sample = appsink.pull_sample()?;
+        }
+
+        let buffer = sample
+            .buffer()
+            .ok_or_else(|| anyhow!("Failed to get buffer from sample"))?;
+
+        let map = buffer
+            .map_readable()
+            .map_err(|_| anyhow!("Failed to map buffer readable"))?;
+
+        let data = Bytes::copy_from_slice(map.as_slice());
+
+        photo_pipeline.set_state(gst::State::Null)?;
+        self.play_pipeline()?;
+
+        Ok(data)
     }
 }
 

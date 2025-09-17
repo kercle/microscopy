@@ -14,11 +14,14 @@ use std::sync::Arc;
 use tokio::sync::watch;
 use turbojpeg::{Compressor, Subsamp, YuvImage};
 
-pub const WIDTH: u32 = 1440;
-pub const HEIGHT: u32 = 810;
+pub const STREAM_WIDTH: u32 = 1440;
+pub const STREAM_HEIGHT: u32 = 810;
+
+pub const PHOTO_WIDTH: u32 = 4056;
+pub const PHOTO_HEIGHT: u32 = 3040;
 
 #[serde_with::skip_serializing_none]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct CameraProperties {
     pub exposure_time: Option<u32>,
@@ -34,7 +37,7 @@ pub struct CameraProperties {
     pub test_pattern: Option<TestPattern>,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum WhiteBalanceMode {
     Auto = 0,
@@ -62,7 +65,7 @@ impl Display for WhiteBalanceMode {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum TestPattern {
     Smpte = 0,
@@ -216,7 +219,7 @@ impl CameraProperties {
 
 pub async fn produce_frames(tx: watch::Sender<Arc<Bytes>>, sink: gst_app::AppSink) {
     let mut tj = Compressor::new().expect("Failed to create TurboJPEG Compressor");
-    let info = VideoInfo::builder(VideoFormat::I420, WIDTH, HEIGHT)
+    let info = VideoInfo::builder(VideoFormat::I420, STREAM_WIDTH, STREAM_HEIGHT)
         .build()
         .expect("Failed to create VideoInfo");
 

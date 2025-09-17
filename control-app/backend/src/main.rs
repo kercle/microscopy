@@ -72,6 +72,7 @@ async fn main() {
             post(handlers::rest::update_self).layer(DefaultBodyLimit::max(100 * 1024 * 1024)),
         )
         .route("/update/firmware", post(handlers::rest::update_firmware))
+        .route("/photo", get(handlers::rest::take_photo))
         .with_state(app_state);
 
     let app = Router::new()

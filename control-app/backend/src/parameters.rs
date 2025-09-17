@@ -2,7 +2,7 @@ use crate::camera::CameraProperties;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Parameters {
     pub camera_properties: CameraProperties,
 }
