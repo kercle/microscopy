@@ -81,13 +81,24 @@ pub async fn take_photo(State(state): State<AppState>) -> impl IntoResponse {
     };
 
     match state.take_photo(&parameters).await {
-        Ok(photo) => Response::builder()
-            .status(200)
-            .header("Cache-Control", "no-cache")
-            .header("Pragma", "no-cache")
-            .header("Content-Type", "image/jpeg")
-            .body(Body::from(photo))
-            .unwrap(),
+        Ok(photo) => {
+            let filename = format!(
+                "microscope-{}.jpg",
+                chrono::Local::now().format("%Y%m%d-%H%M%S")
+            );
+            Response::builder()
+                .status(200)
+                .header("Cache-Control", "no-cache")
+                .header("Pragma", "no-cache")
+                .header("Content-Type", "image/jpeg")
+                .header(
+                    "Content-Disposition",
+                    format!("attachment; filename=\"{filename}\""),
+                )
+                .header("Content-Length", photo.len().to_string())
+                .body(Body::from(photo))
+                .unwrap()
+        }
         Err(err) => Response::builder()
             .status(500)
             .header("Cache-Control", "no-cache")

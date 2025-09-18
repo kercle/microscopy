@@ -7,9 +7,10 @@
 	import type { LogMessage } from '$lib';
 	import Live from '$lib/icons/Live.svelte';
 	import Journal from '$lib/icons/Journal.svelte';
+	import Download from '$lib/icons/Download.svelte';
+	import StreamMenu from '$lib/components/StreamMenu.svelte';
 
 	let ws: WebSocket | null = $state(null);
-	let log_messages: LogMessage[] = $state([]);
 
 	let camera_controls_ref: CameraControls;
 	let logs_journal_ref: LogsJournal;
@@ -38,8 +39,14 @@
 				<Live />
 				Live
 			</label>
-			<div class="tab-content bg-base-100 border-t-base-300 p-6">
-				<img src="/api/stream" alt="Microscope camera stream" class="w-full rounded-md" />
+			<div class="tab-content bg-base-100 border-t-base-300 relative p-2">
+				<img
+					src="/api/stream"
+					alt="Microscope camera stream"
+					class="w-full rounded-md"
+					draggable="false"
+				/>
+				<StreamMenu />
 			</div>
 
 			<!-- Tab 2: Journal -->
