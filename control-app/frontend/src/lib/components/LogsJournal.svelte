@@ -27,7 +27,7 @@
 						class:text-green-500={log.level === 'INFO'}
 						class:text-blue-500={log.level === 'DEBUG'}>[{log.level}]</span
 					>
-					<span class="text-sm">{log.message}</span>
+					<span class="font-mono text-xs">{log.message}</span>
 				</div>
 			{/each}
 		</div>
