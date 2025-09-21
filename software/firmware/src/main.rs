@@ -30,7 +30,7 @@ async fn main(spawner: Spawner) {
     let peripherals = esp_hal::init(config);
 
     let mut step = Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default());
-    let mut dir = Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default());
+    let _dir = Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default());
     let _ms1 = Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default());
     let _ms2 = Output::new(peripherals.GPIO33, Level::Low, OutputConfig::default());
 
