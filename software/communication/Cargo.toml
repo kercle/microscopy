@@ -8,7 +8,7 @@ name = "communication"
 path = "src/lib.rs"
 
 [[bin]]
-name = "talk"
-path = "src/bin.rs"
+name = "com_client"
+path = "src/client.rs"
 
 [dependencies]
