@@ -1,0 +1,14 @@
+[package]
+name = "communication"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "communication"
+path = "src/lib.rs"
+
+[[bin]]
+name = "talk"
+path = "src/bin.rs"
+
+[dependencies]

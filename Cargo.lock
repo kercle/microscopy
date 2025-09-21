@@ -316,6 +316,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "communication"
+version = "0.1.0"
+
+[[package]]
 name = "control-app"
 version = "0.1.0"
 dependencies = [

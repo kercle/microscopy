@@ -1,6 +1,3 @@
 [workspace]
 resolver = "3"
-members = [
-    "software/backend",
-    "software/firmware",
-]
+members = ["software/backend", "software/communication", "software/firmware"]
