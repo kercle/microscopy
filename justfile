@@ -10,6 +10,16 @@ serve: serve-backend serve-frontend
 serve-backend:
     cargo run -- serve
 
-[working-directory: "control-app/frontend"]
+[working-directory: "software/frontend"]
 serve-frontend:
     npm run dev
+
+export PATH := "~/.cargo/bin:" + env_var('PATH')
+
+[working-directory: "software/firmware"]
+flash:
+    . "$HOME/.rustup/export-esp.sh"
+    cargo build --release
+    echo "$(pwd)"
+    espflash flash --chip esp32 --port /dev/ttyUSB0 \
+        "../../target/xtensa-esp32-none-elf/release/firmware"

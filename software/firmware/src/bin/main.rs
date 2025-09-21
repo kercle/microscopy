@@ -27,8 +27,8 @@ fn main() -> ! {
 
     let mut step = Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default());
     let mut dir = Output::new(peripherals.GPIO25, Level::High, OutputConfig::default());
-    let mut ms1 = Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default());
-    let mut ms2 = Output::new(peripherals.GPIO33, Level::Low, OutputConfig::default());
+    let _ms1 = Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default());
+    let _ms2 = Output::new(peripherals.GPIO33, Level::Low, OutputConfig::default());
 
     dir.set_high();
 
