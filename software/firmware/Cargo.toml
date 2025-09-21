@@ -11,7 +11,6 @@ path = "./src/bin/main.rs"
 [dependencies]
 esp-bootloader-esp-idf = { version = "0.2.0", features = ["esp32"] }
 esp-hal = { version = "=1.0.0-rc.0", features = ["esp32", "unstable"] }
-
 critical-section = "1.2.0"
 esp-alloc = "0.8.0"
 esp-println = { version = "0.15.0", features = ["esp32", "log-04"] }
@@ -21,7 +20,7 @@ esp-backtrace = { version = "0.17.0", features = [
     "panic-handler",
     "println",
 ] }
-log = "0.4.28"
+communication = { path = "../communication" }
 
 
 [profile.dev]

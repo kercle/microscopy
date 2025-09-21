@@ -12,15 +12,12 @@ use esp_hal::{
     gpio::{Level, Output, OutputConfig},
     main,
 };
-use esp_println::println;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[main]
 fn main() -> ! {
     let peripherals = esp_hal::init(esp_hal::Config::default());
-
-    println!("Hello world!");
 
     // Set GPIO7 as an output, and set its state high initially.
     let mut led = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
