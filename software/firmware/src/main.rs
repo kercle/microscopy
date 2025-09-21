@@ -26,29 +26,23 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[embassy_executor::task]
-async fn uart_rx_task(mut rx: UartRx<'static>, step: Output<'static>) {
-    let mut buf = [0u8; 64];
+async fn uart_echo_task(
+    mut rx: UartRx<'static, esp_hal::Async>,
+    mut tx: UartTx<'static, esp_hal::Async>,
+) {
+    let _ = tx.write(b"BOOT\r\n");
+    let _ = tx.flush();
 
+    let mut buf = [0u8; 64];
     loop {
         let n = rx.read_async(&mut buf).await.unwrap();
-        for &b in &buf[..n] {
-            if *b == b's' {
-                for _ in 0..50 {
-                    step.set_high();
-                    Timer::after(Duration::from_millis(1)).await;
-                    step.set_low();
-                    Timer::after(Duration::from_millis(1)).await;
-                }
-            }
+        if n > 0 {
+            // simple echo
+            let _ = tx.write_async(b"Received: ").await;
+            let _ = tx.write_async(&buf[..n]).await;
+            let _ = tx.write_async(b"\r\n").await;
+            let _ = tx.flush_async().await;
         }
-    }
-}
-
-#[embassy_executor::task]
-async fn uart_tx_task(mut tx: UartTx<'static>) {
-    loop {
-        tx.write_async(b"ok\n").await.ok();
-        embassy_time::Timer::after_millis(1000).await;
     }
 }
 
@@ -57,34 +51,25 @@ async fn main(spawner: Spawner) {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    let mut step = Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default());
+    let uart_cfg = UartConfig::default().with_baudrate(115_200);
+    let uart0 = Uart::new(peripherals.UART0, uart_cfg)
+        .unwrap()
+        .with_tx(peripherals.GPIO1)
+        .with_rx(peripherals.GPIO3)
+        .into_async();
+
+    let (rx0, tx0) = uart0.split();
+    spawner.must_spawn(uart_echo_task(rx0, tx0));
+
+    let timer0 = TimerGroup::new(peripherals.TIMG0);
+    esp_hal_embassy::init(timer0.timer0);
+
+    let _step = Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default());
     let _dir = Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default());
     let _ms1 = Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default());
     let _ms2 = Output::new(peripherals.GPIO33, Level::Low, OutputConfig::default());
 
-     let uart1 = Uart::new(
-        peripherals.UART1,
-        peripherals.GPIO17, // TX pin
-        peripherals.GPIO16, // RX pin
-        UartConfig::default().baudrate(115_200),
-    );
-
-    let (tx, rx) = uart1.split();
-
     esp_alloc::heap_allocator!(size: 64 * 1024);
-
-    let timer0 = TimerGroup::new(peripherals.TIMG1);
-    esp_hal_embassy::init(timer0.timer0);
-
-    for _ in 0..100 {
-        step.set_high();
-        Timer::after(Duration::from_millis(1)).await;
-        step.set_low();
-        Timer::after(Duration::from_millis(1)).await;
-    }
-
-    spawner.must_spawn(uart_tx_task(tx));
-    spawner.must_spawn(uart_rx_task(rx, step));
 
     loop {
         Timer::after(Duration::from_secs(1)).await;
