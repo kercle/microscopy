@@ -7,6 +7,8 @@ extern crate std;
 
 #[cfg(feature = "std")]
 mod parse;
+#[cfg(feature = "host")]
+mod driver;
 
 mod bytes_repr;
 

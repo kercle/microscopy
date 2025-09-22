@@ -7,15 +7,16 @@ edition = "2024"
 name = "communication"
 path = "src/lib.rs"
 
-[features]
-default = ["std", "client"]
-client = ["anyhow", "clap", "ratatui", "regex", "std", "tokio", "tokio-util", "serialport"]
-std = []
-
 [[bin]]
 name = "com-client"
-path = "src/client.rs"
-required-features = ["client"]
+path = "src/cli.rs"
+required-features = ["host", "cli"]
+
+[features]
+default = ["cli", "host"]
+cli = ["clap", "ratatui", "tokio", "tokio-util"]
+host = ["anyhow", "std", "regex", "serialport"]
+std = []
 
 [dependencies]
 cobs = { version = "0.4.0", default-features = false, features = ["alloc"] }
