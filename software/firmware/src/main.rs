@@ -18,10 +18,11 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use embassy_time::{Duration, Timer};
 
 use communication::{DeviceEvent, StageMotorCmd};
+use heapless::{String, Vec};
 
 struct Channels {
     stage_motor: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
-    _device_events: Channel<CriticalSectionRawMutex, DeviceEvent, 16>,
+    _device_events: Channel<CriticalSectionRawMutex, DeviceEvent<String<64>>, 16>,
 }
 
 impl Channels {
@@ -49,29 +50,62 @@ async fn uart_rx_task(
     mut rx: UartRx<'static, esp_hal::Async>,
     mut tx: UartTx<'static, esp_hal::Async>,
 ) {
-    let _ = tx.write(b"BOOT\r\n");
-    let _ = tx.flush();
+    let mut buffer = [0u8; 64];
+
+    let len = DeviceEvent::InitSignature
+        .encode_bytes(&mut buffer)
+        .expect("Buffer too small for init string");
+
+    let _ = tx.write_async(&buffer[..len]).await;
+    let _ = tx.flush_async();
 
     let mut buf = [0u8; 64];
+    let mut packet = Vec::<u8, 256>::new();
     loop {
         let n = rx.read_async(&mut buf).await.unwrap();
-        if n > 0 {
-            for i in 0..n {
-                if buf[i] == b's' {
-                    let cmd = StageMotorCmd::MoveSteps {
-                        steps: 40,
-                        step_delay_us: 1000,
-                    };
-                    let _ = CHANNELS.stage_motor.try_send(cmd);
-                } else if buf[i] == b'S' {
-                    let cmd = StageMotorCmd::MoveSteps {
-                        steps: -40,
-                        step_delay_us: 1000,
-                    };
-                    let _ = CHANNELS.stage_motor.try_send(cmd);
+
+        if n == 0 {
+            continue;
+        }
+
+        packet.extend_from_slice(&buf[..n]).unwrap_or(());
+        let end_pos = if let Some(end_pos) = packet.iter().position(|&b| b == 0) {
+            end_pos
+        } else {
+            // No complete packet yet
+            continue;
+        };
+
+        let cmd_slice = &packet[..end_pos];
+        if let Ok(cmd) = communication::HostCommand::decode_bytes(cmd_slice) {
+            match cmd {
+                communication::HostCommand::StageMotor(motor_cmd) => {
+                    let _ = CHANNELS.stage_motor.try_send(motor_cmd);
                 }
+                _ => tx.wr,
             }
         }
+
+        // Remove the processed packet from the buffer
+        packet.drain(..=end_pos);
+
+        // if n > 0 {
+        //     for i in 0..n {
+        //         if buf[i] == b's' {
+        //             let cmd = StageMotorCmd::MoveSteps {
+        //                 steps: 40,
+        //                 step_delay_us: 1000,
+        //             };
+        //             let _ = CHANNELS.stage_motor.try_send(cmd);
+        //         } else if buf[i] == b'S' {
+        //             let cmd = StageMotorCmd::MoveSteps {
+        //                 steps: -40,
+        //                 step_delay_us: 1000,
+        //             };
+        //             let _ = CHANNELS.stage_motor.try_send(cmd);
+        //         }
+        //     }
+        // }
     }
 }
 

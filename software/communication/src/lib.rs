@@ -1,47 +1,65 @@
 #![no_std]
 
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+
 #[cfg(feature = "std")]
 extern crate std;
 
 #[cfg(feature = "std")]
 mod parse;
 
+mod bytes_repr;
+
 const COM_INIT_STR: &str = "MICROSCOPE_COM_v0.1";
 
+#[derive(Debug)]
 pub enum Error {
     BufferTooSmall,
     InvalidCommand,
 }
 
-pub enum DeviceEvent {
+#[derive(Serialize, Deserialize, Debug)]
+pub enum LogMessageLevel {
+    Info,
+    Warning,
+    Error,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum DeviceEvent<StrType> {
     InitSignature,
+    LogMessage { level: LogMessageLevel, message: StrType },
     StageMotorPosition { position_steps: i32 },
 }
 
-impl DeviceEvent {
-    pub fn to_bytes(&self, buffer: &mut [u8]) -> Result<usize, Error> {
+impl<StrType: Serialize + DeserializeOwned> DeviceEvent<StrType> {
+    pub fn encode_bytes(&self, buffer: &mut [u8]) -> Result<usize, Error> {
         match self {
             DeviceEvent::InitSignature => {
                 let msg = COM_INIT_STR.as_bytes();
                 if buffer.len() >= msg.len() {
                     buffer[..msg.len()].copy_from_slice(msg);
-                    Ok(msg.len())
+                    buffer[msg.len()] = 0; // Null-terminate
+                    Ok(msg.len() + 1)
                 } else {
                     Err(Error::BufferTooSmall)
                 }
             }
-            DeviceEvent::StageMotorPosition { position_steps: _ } => {
-                buffer[..1].copy_from_slice(b"P");
-                Ok(1)
-            }
+            _ => bytes_repr::encode_bytes(self, buffer),
         }
+    }
+
+    pub fn decode_bytes(data: &[u8]) -> Result<Self, Error> {
+        bytes_repr::decode_bytes(data)
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum StageMotorCmd {
     MoveSteps { steps: i32, step_delay_us: u32 },
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum HostCommand {
     StageMotor(StageMotorCmd),
 }
@@ -52,16 +70,12 @@ impl HostCommand {
         None
     }
 
-    pub fn to_bytes(&self, buffer: &mut [u8]) -> Result<usize, Error> {
-        match self {
-            HostCommand::StageMotor(StageMotorCmd::MoveSteps {
-                steps: _,
-                step_delay_us: _,
-            }) => {
-                buffer[..1].copy_from_slice(b"S");
-                Ok(1)
-            }
-        }
+    pub fn encode_bytes(&self, buffer: &mut [u8]) -> Result<usize, Error> {
+        bytes_repr::encode_bytes(self, buffer)
+    }
+
+    pub fn decode_bytes(data: &[u8]) -> Result<Self, Error> {
+        bytes_repr::decode_bytes(data)
     }
 }
 

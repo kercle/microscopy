@@ -15,15 +15,10 @@ fn main() -> Result<()> {
     app_result
 }
 
-/// App holds the state of the application
 struct App {
-    /// Current value of the input box
     input: String,
-    /// Position of cursor in the editor area.
     character_index: usize,
-    /// Current input mode
     input_mode: InputMode,
-    /// History of recorded messages
     messages: Vec<String>,
 }
 

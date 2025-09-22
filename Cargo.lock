@@ -470,7 +470,6 @@ dependencies = [
  "ratatui",
  "regex",
  "serde",
- "tokio",
 ]
 
 [[package]]
