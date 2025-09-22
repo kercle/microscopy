@@ -1,3 +1,6 @@
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+
 use anyhow::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -8,9 +11,10 @@ use ratatui::{
     widgets::{Block, List, ListItem, Paragraph},
 };
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let terminal = ratatui::init();
-    let app_result = App::new().run(terminal);
+    let app_result = App::new().run(terminal).await;
     ratatui::restore();
     app_result
 }
@@ -22,13 +26,25 @@ struct App {
     messages: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
 enum InputMode {
     Monitor,
     Command,
 }
 
+enum AppEvent {
+    Exit,
+    SetInputMode(InputMode),
+    SubmitTextInput,
+    SubmitSerialMessage(String),
+    EnterChar(char),
+    DeleteChar,
+    MoveCursorLeft,
+    MoveCursorRight,
+}
+
 impl App {
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
             input: String::new(),
             input_mode: InputMode::Monitor,
@@ -95,39 +111,132 @@ impl App {
         self.character_index = 0;
     }
 
-    fn submit_message(&mut self) {
-        self.messages.push(self.input.clone());
+    async fn submit_message(&mut self, message: String) {
+        self.messages.push(message);
         self.input.clear();
         self.reset_cursor();
     }
 
-    fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        loop {
-            terminal.draw(|frame| self.draw(frame))?;
+    async fn read_from_serial_port(
+        app_event_tx: mpsc::Sender<AppEvent>,
+        quit_notify: CancellationToken,
+    ) -> Result<()> {
+        while !quit_notify.is_cancelled() {
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            app_event_tx
+                .send(AppEvent::SubmitSerialMessage(
+                    "Test message from serial port".into(),
+                ))
+                .await?;
+        }
 
-            if let Event::Key(key) = event::read()? {
-                match self.input_mode {
-                    InputMode::Monitor => match key.code {
-                        KeyCode::Char('s') => {
-                            self.input_mode = InputMode::Command;
-                        }
-                        KeyCode::Char('q') => {
-                            return Ok(());
-                        }
-                        _ => {}
-                    },
-                    InputMode::Command if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => self.submit_message(),
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Left => self.move_cursor_left(),
-                        KeyCode::Right => self.move_cursor_right(),
-                        KeyCode::Esc => self.input_mode = InputMode::Monitor,
-                        _ => {}
-                    },
-                    InputMode::Command => {}
+        Ok(())
+    }
+
+    async fn process_key_events(
+        mut input_mode: InputMode,
+        app_event_tx: mpsc::Sender<AppEvent>,
+        quit_notify: CancellationToken,
+    ) -> Result<()> {
+        while !quit_notify.is_cancelled() {
+            if let Ok(event) = tokio::task::spawn_blocking(event::read).await {
+                if let Event::Key(key) = event? {
+                    match input_mode {
+                        InputMode::Monitor => match key.code {
+                            KeyCode::Char('s') => {
+                                input_mode = InputMode::Command;
+                                app_event_tx
+                                    .send(AppEvent::SetInputMode(InputMode::Command))
+                                    .await?;
+                            }
+                            KeyCode::Char('q') => {
+                                app_event_tx.send(AppEvent::Exit).await?;
+                                break;
+                            }
+                            _ => {}
+                        },
+                        InputMode::Command if key.kind == KeyEventKind::Press => match key.code {
+                            KeyCode::Enter => app_event_tx.send(AppEvent::SubmitTextInput).await?,
+                            KeyCode::Char(to_insert) => {
+                                app_event_tx.send(AppEvent::EnterChar(to_insert)).await?
+                            }
+                            KeyCode::Backspace => app_event_tx.send(AppEvent::DeleteChar).await?,
+                            KeyCode::Left => app_event_tx.send(AppEvent::MoveCursorLeft).await?,
+                            KeyCode::Right => app_event_tx.send(AppEvent::MoveCursorRight).await?,
+                            KeyCode::Esc => {
+                                app_event_tx
+                                    .send(AppEvent::SetInputMode(InputMode::Monitor))
+                                    .await?;
+                                input_mode = InputMode::Monitor;
+                            }
+                            _ => {}
+                        },
+                        InputMode::Command => {}
+                    }
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        let quit_notify = CancellationToken::new();
+        let (app_event_tx, mut app_event_rx) = mpsc::channel::<AppEvent>(100);
+
+        {
+            let app_event_tx = app_event_tx.clone();
+            let input_mode = self.input_mode.clone();
+            let quit_notify = quit_notify.clone();
+            tokio::spawn(async move {
+                let _ = Self::process_key_events(input_mode, app_event_tx, quit_notify).await;
+            });
+        }
+
+        {
+            let app_event_tx = app_event_tx.clone();
+            let quit_notify = quit_notify.clone();
+            tokio::spawn(Self::read_from_serial_port(app_event_tx, quit_notify));
+        }
+
+        terminal.draw(|frame| self.draw(frame))?;
+        loop {
+            let event = if let Some(event) = app_event_rx.recv().await {
+                event
+            } else {
+                quit_notify.cancel();
+                return Ok(());
+            };
+
+            match event {
+                AppEvent::Exit => {
+                    quit_notify.cancel();
+                    return Ok(());
+                }
+                AppEvent::SetInputMode(mode) => {
+                    self.input_mode = mode;
+                }
+                AppEvent::SubmitTextInput => {
+                    self.submit_message(self.input.clone()).await;
+                }
+                AppEvent::SubmitSerialMessage(msg) => {
+                    self.messages.push(msg);
+                }
+                AppEvent::EnterChar(c) => {
+                    self.enter_char(c);
+                }
+                AppEvent::DeleteChar => {
+                    self.delete_char();
+                }
+                AppEvent::MoveCursorLeft => {
+                    self.move_cursor_left();
+                }
+                AppEvent::MoveCursorRight => {
+                    self.move_cursor_right();
+                }
+            }
+
+            terminal.draw(|frame| self.draw(frame))?;
         }
     }
 

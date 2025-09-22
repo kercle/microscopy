@@ -470,6 +470,8 @@ dependencies = [
  "ratatui",
  "regex",
  "serde",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -3058,7 +3060,9 @@ dependencies = [
  "io-uring",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
+ "signal-hook-registry",
  "slab",
  "socket2",
  "tokio-macros",
