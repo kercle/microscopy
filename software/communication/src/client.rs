@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
+use communication::HostCommand;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -39,8 +40,8 @@ enum InputMode {
 enum AppEvent {
     Exit,
     SetInputMode(InputMode),
-    SubmitTextInput,
-    SubmitSerialMessage(String),
+    SubmitCommand,
+    SerialMessage(String),
     EnterChar(char),
     DeleteChar,
     MoveCursorLeft,
@@ -132,8 +133,9 @@ impl App {
         Ok(())
     }
 
-    async fn read_from_serial_port(
+    async fn serial_port_com(
         app_event_tx: mpsc::Sender<AppEvent>,
+        mut host_cmd_rx: mpsc::Receiver<HostCommand>,
         quit_notify: CancellationToken,
     ) -> Result<()> {
         // TODO: Make port configurable
@@ -148,16 +150,24 @@ impl App {
         let mut serial_data: Vec<u8> = Vec::new();
         let mut connection_established = false;
         while !quit_notify.is_cancelled() {
+            while let Ok(cmd) = host_cmd_rx.try_recv() {
+                let mut buffer: [u8; 256] = [0; 256];
+                let packet_size = cmd
+                    .encode_bytes(&mut buffer)
+                    .map_err(|e| anyhow::anyhow!("Failed to encode command: {:?}", e))?;
+                port.write_all(&buffer[..packet_size])?;
+                port.write_all(&[0u8])?; // Null-terminate
+                port.flush()?;
+            }
+
             if port.bytes_to_read()? == 0 {
                 tokio::time::sleep(Duration::from_millis(20)).await;
                 continue;
             }
 
             let mut serial_buf: [u8; 1024 * 1024] = [0; 1024 * 1024];
-            port.read(&mut serial_buf).map(|n| {
-                serial_data.extend_from_slice(&serial_buf[..n]);
-                n
-            })?;
+            port.read(&mut serial_buf)
+                .inspect(|&n| serial_data.extend_from_slice(&serial_buf[..n]))?;
 
             if connection_established {
                 tokio::fs::write("/tmp/last_serial_packet.bin", &serial_data).await?;
@@ -168,7 +178,7 @@ impl App {
 
                     if decoded.is_err() {
                         app_event_tx
-                            .try_send(AppEvent::SubmitSerialMessage(format!(
+                            .try_send(AppEvent::SerialMessage(format!(
                                 "Failed to decode package: {:?}",
                                 decoded.err()
                             )))
@@ -179,14 +189,12 @@ impl App {
                     let decoded = decoded.unwrap();
 
                     match decoded {
-                        DeviceEvent::LogMessage { level, message } => {
-                            app_event_tx
-                                .try_send(AppEvent::SubmitSerialMessage(message))
-                                .ok();
+                        DeviceEvent::LogMessage { level: _, message } => {
+                            app_event_tx.try_send(AppEvent::SerialMessage(message)).ok();
                         }
                         _ => {
                             app_event_tx
-                                .try_send(AppEvent::SubmitSerialMessage(
+                                .try_send(AppEvent::SerialMessage(
                                     "unimplemented device event.".into(),
                                 ))
                                 .ok();
@@ -208,9 +216,7 @@ impl App {
 
                         connection_established = true;
                         app_event_tx
-                            .try_send(AppEvent::SubmitSerialMessage(
-                                "Connection established".into(),
-                            ))
+                            .try_send(AppEvent::SerialMessage("Connection established".into()))
                             .ok();
                         break;
                     }
@@ -249,7 +255,7 @@ impl App {
                         _ => {}
                     },
                     InputMode::Command if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => app_event_tx.send(AppEvent::SubmitTextInput).await?,
+                        KeyCode::Enter => app_event_tx.send(AppEvent::SubmitCommand).await?,
                         KeyCode::Char(to_insert) => {
                             app_event_tx.send(AppEvent::EnterChar(to_insert)).await?
                         }
@@ -275,6 +281,7 @@ impl App {
     async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         let quit_notify = CancellationToken::new();
         let (app_event_tx, mut app_event_rx) = mpsc::channel::<AppEvent>(100);
+        let (host_cmd_tx, host_cmd_rx) = mpsc::channel::<HostCommand>(10);
 
         {
             let app_event_tx = app_event_tx.clone();
@@ -288,7 +295,11 @@ impl App {
         {
             let app_event_tx = app_event_tx.clone();
             let quit_notify = quit_notify.clone();
-            tokio::spawn(Self::read_from_serial_port(app_event_tx, quit_notify));
+            tokio::spawn(Self::serial_port_com(
+                app_event_tx,
+                host_cmd_rx,
+                quit_notify,
+            ));
         }
 
         terminal.draw(|frame| self.draw(frame))?;
@@ -308,10 +319,18 @@ impl App {
                 AppEvent::SetInputMode(mode) => {
                     self.input_mode = mode;
                 }
-                AppEvent::SubmitTextInput => {
-                    self.submit_message(self.input.clone()).await;
+                AppEvent::SubmitCommand => {
+                    let input = self.input.clone();
+                    let packet = HostCommand::from_str(input.as_str());
+
+                    if let Err(e) = packet {
+                        self.messages.push(format!("Failed to parse command: {e}"));
+                    } else {
+                        host_cmd_tx.send(packet.unwrap()).await?;
+                        self.submit_message(input).await;
+                    }
                 }
-                AppEvent::SubmitSerialMessage(msg) => {
+                AppEvent::SerialMessage(msg) => {
                     self.messages.push(msg);
                 }
                 AppEvent::EnterChar(c) => {

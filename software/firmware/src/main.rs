@@ -34,6 +34,10 @@ impl Channels {
             _device_events: Channel::new(),
         }
     }
+
+    fn send_device_event(&self, event: DeviceEvent) {
+        let _ = self._device_events.try_send(event);
+    }
 }
 
 static CHANNELS: Channels = Channels::new();
@@ -52,10 +56,7 @@ async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
     let mut buffer = [0u8; 512];
 
     loop {
-        match CHANNELS
-            ._device_events
-            .try_receive()
-        {
+        match CHANNELS._device_events.try_receive() {
             Ok(event) => {
                 let len = event
                     .encode_bytes(&mut buffer)
@@ -72,11 +73,7 @@ async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
 }
 
 #[embassy_executor::task]
-async fn uart_rx_task(
-    mut rx: UartRx<'static, esp_hal::Async>,
-) {
-    let mut buffer = [0u8; 64];
-
+async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
     CHANNELS
         ._device_events
         .try_send(DeviceEvent::InitSignature)
@@ -105,30 +102,11 @@ async fn uart_rx_task(
                 communication::HostCommand::StageMotor(motor_cmd) => {
                     let _ = CHANNELS.stage_motor.try_send(motor_cmd);
                 }
-                _ => {}
             }
         }
 
         // Remove the processed packet from the buffer
         packet.drain(..=end_pos);
-
-        // if n > 0 {
-        //     for i in 0..n {
-        //         if buf[i] == b's' {
-        //             let cmd = StageMotorCmd::MoveSteps {
-        //                 steps: 40,
-        //                 step_delay_us: 1000,
-        //             };
-        //             let _ = CHANNELS.stage_motor.try_send(cmd);
-        //         } else if buf[i] == b'S' {
-        //             let cmd = StageMotorCmd::MoveSteps {
-        //                 steps: -40,
-        //                 step_delay_us: 1000,
-        //             };
-        //             let _ = CHANNELS.stage_motor.try_send(cmd);
-        //         }
-        //     }
-        // }
     }
 }
 
@@ -156,24 +134,16 @@ async fn motor_task(
                     step.set_low();
                     Timer::after(Duration::from_micros(step_delay_us as u64)).await;
                 }
+
+                let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+                    level: communication::LogMessageLevel::Info,
+                    message: String::try_from("Stage moved to new position.").unwrap(),
+                });
             }
             _ => {}
         }
 
         Timer::after(Duration::from_millis(20)).await;
-    }
-}
-
-#[embassy_executor::task]
-async fn test_log_messages() {
-    loop {
-        let log_event = DeviceEvent::LogMessage {
-            level: communication::LogMessageLevel::Warning,
-            message: String::try_from("Hello world!").unwrap(),
-        };
-        let _ = CHANNELS._device_events.try_send(log_event);
-
-        Timer::after(Duration::from_secs(2)).await;
     }
 }
 
@@ -195,8 +165,6 @@ async fn main(spawner: Spawner) {
 
     spawner.must_spawn(uart_tx_task(tx0));
     spawner.must_spawn(uart_rx_task(rx0));
-
-    spawner.must_spawn(test_log_messages());
     spawner.must_spawn(motor_task(
         Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default()),
         Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default()),
