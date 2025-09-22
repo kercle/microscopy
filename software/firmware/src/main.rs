@@ -17,12 +17,14 @@ use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::{Duration, Timer};
 
-use communication::{DeviceEvent, StageMotorCmd};
+use communication::StageMotorCmd;
 use heapless::{String, Vec};
+
+type DeviceEvent = communication::DeviceEvent<String<64>>;
 
 struct Channels {
     stage_motor: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
-    _device_events: Channel<CriticalSectionRawMutex, DeviceEvent<String<64>>, 16>,
+    _device_events: Channel<CriticalSectionRawMutex, DeviceEvent, 16>,
 }
 
 impl Channels {
@@ -82,7 +84,7 @@ async fn uart_rx_task(
                 communication::HostCommand::StageMotor(motor_cmd) => {
                     let _ = CHANNELS.stage_motor.try_send(motor_cmd);
                 }
-                _ => tx.wr,
+                _ => {}
             }
         }
 

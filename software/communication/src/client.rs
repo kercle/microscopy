@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -10,6 +12,8 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, List, ListItem, Paragraph},
 };
+
+type DeviceEvent = communication::DeviceEvent<String>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -117,17 +121,65 @@ impl App {
         self.reset_cursor();
     }
 
+    async fn reset_microcontroller(
+        mut port: Box<dyn serialport::SerialPort>,
+    ) -> serialport::Result<()> {
+        port.write_data_terminal_ready(false)?;
+
+        port.write_request_to_send(true)?;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        port.write_request_to_send(false)?;
+        Ok(())
+    }
+
     async fn read_from_serial_port(
         app_event_tx: mpsc::Sender<AppEvent>,
         quit_notify: CancellationToken,
     ) -> Result<()> {
+        // TODO: Make port configurable
+
+        let mut port = serialport::new("/dev/ttyUSB0", 115_200)
+            .timeout(Duration::from_millis(10))
+            .open()
+            .expect("Failed to open port");
+
+        Self::reset_microcontroller(port.try_clone()?).await?;
+
+        let mut serial_data: Vec<u8> = Vec::new();
+        let mut connection_established = false;
         while !quit_notify.is_cancelled() {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            app_event_tx
-                .send(AppEvent::SubmitSerialMessage(
-                    "Test message from serial port".into(),
-                ))
-                .await?;
+            if port.bytes_to_read()? == 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                continue;
+            }
+
+            let mut serial_buf: [u8; 1024 * 1024] = [0; 1024 * 1024];
+            port.read(&mut serial_buf).map(|n| {
+                serial_data.extend_from_slice(&serial_buf[..n]);
+                n
+            })?;
+
+            if connection_established {
+            } else {
+                let mut init_packet: [u8; 64] = [0; 64];
+                let init_package_size =
+                    DeviceEvent::InitSignature
+                        .encode_bytes(&mut init_packet)
+                        .map_err(|e| anyhow::anyhow!("Failed to encode init package: {:?}", e))?;
+
+                for i in 0..serial_data.len() - init_package_size + 1 {
+                    if serial_data[i..].starts_with(&init_packet[..init_package_size]) {
+                        serial_data.drain(..i + init_package_size);
+                        connection_established = true;
+                        app_event_tx
+                            .try_send(AppEvent::SubmitSerialMessage(
+                                "Connection established".into(),
+                            ))
+                            .ok();
+                        break;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -139,40 +191,44 @@ impl App {
         quit_notify: CancellationToken,
     ) -> Result<()> {
         while !quit_notify.is_cancelled() {
-            if let Ok(event) = tokio::task::spawn_blocking(event::read).await {
-                if let Event::Key(key) = event? {
-                    match input_mode {
-                        InputMode::Monitor => match key.code {
-                            KeyCode::Char('s') => {
-                                input_mode = InputMode::Command;
-                                app_event_tx
-                                    .send(AppEvent::SetInputMode(InputMode::Command))
-                                    .await?;
-                            }
-                            KeyCode::Char('q') => {
-                                app_event_tx.send(AppEvent::Exit).await?;
-                                break;
-                            }
-                            _ => {}
-                        },
-                        InputMode::Command if key.kind == KeyEventKind::Press => match key.code {
-                            KeyCode::Enter => app_event_tx.send(AppEvent::SubmitTextInput).await?,
-                            KeyCode::Char(to_insert) => {
-                                app_event_tx.send(AppEvent::EnterChar(to_insert)).await?
-                            }
-                            KeyCode::Backspace => app_event_tx.send(AppEvent::DeleteChar).await?,
-                            KeyCode::Left => app_event_tx.send(AppEvent::MoveCursorLeft).await?,
-                            KeyCode::Right => app_event_tx.send(AppEvent::MoveCursorRight).await?,
-                            KeyCode::Esc => {
-                                app_event_tx
-                                    .send(AppEvent::SetInputMode(InputMode::Monitor))
-                                    .await?;
-                                input_mode = InputMode::Monitor;
-                            }
-                            _ => {}
-                        },
-                        InputMode::Command => {}
-                    }
+            let event = if let Ok(event) = tokio::task::spawn_blocking(event::read).await {
+                event?
+            } else {
+                continue;
+            };
+
+            if let Event::Key(key) = event {
+                match input_mode {
+                    InputMode::Monitor => match key.code {
+                        KeyCode::Char('s') => {
+                            input_mode = InputMode::Command;
+                            app_event_tx
+                                .send(AppEvent::SetInputMode(InputMode::Command))
+                                .await?;
+                        }
+                        KeyCode::Char('q') => {
+                            app_event_tx.send(AppEvent::Exit).await?;
+                            break;
+                        }
+                        _ => {}
+                    },
+                    InputMode::Command if key.kind == KeyEventKind::Press => match key.code {
+                        KeyCode::Enter => app_event_tx.send(AppEvent::SubmitTextInput).await?,
+                        KeyCode::Char(to_insert) => {
+                            app_event_tx.send(AppEvent::EnterChar(to_insert)).await?
+                        }
+                        KeyCode::Backspace => app_event_tx.send(AppEvent::DeleteChar).await?,
+                        KeyCode::Left => app_event_tx.send(AppEvent::MoveCursorLeft).await?,
+                        KeyCode::Right => app_event_tx.send(AppEvent::MoveCursorRight).await?,
+                        KeyCode::Esc => {
+                            app_event_tx
+                                .send(AppEvent::SetInputMode(InputMode::Monitor))
+                                .await?;
+                            input_mode = InputMode::Monitor;
+                        }
+                        _ => {}
+                    },
+                    InputMode::Command => {}
                 }
             }
         }
