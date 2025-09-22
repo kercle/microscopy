@@ -28,6 +28,15 @@ impl DeviceDriver {
         })
     }
 
+    fn reset(&mut self) -> serialport::Result<()> {
+        self.port.write_data_terminal_ready(false)?;
+
+        self.port.write_request_to_send(true)?;
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        self.port.write_request_to_send(false)?;
+        Ok(())
+    }
+
     fn verify_signature<StrType: Serialize + DeserializeOwned>(&mut self) -> bool {
         if self.signature_received {
             return true;
