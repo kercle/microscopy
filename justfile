@@ -17,6 +17,11 @@ serve-frontend:
 export PATH := "~/.cargo/bin:" + env_var('PATH')
 
 [working-directory: "software/firmware"]
+build-firmware:
+    . "$HOME/.rustup/export-esp.sh"
+    cargo build --release
+
+[working-directory: "software/firmware"]
 flash:
     . "$HOME/.rustup/export-esp.sh"
     cargo build --release
