@@ -291,24 +291,26 @@ impl App {
         let (app_event_tx, mut app_event_rx) = mpsc::channel::<AppEvent>(100);
         let (host_cmd_tx, host_cmd_rx) = mpsc::channel::<HostCommand>(10);
 
-        {
+        let key_event_handle = {
             let app_event_tx = app_event_tx.clone();
             let input_mode = self.input_mode.clone();
             let quit_notify = quit_notify.clone();
-            tokio::spawn(async move {
-                let _ = Self::process_key_events(input_mode, app_event_tx, quit_notify).await;
-            });
-        }
+            tokio::spawn(Self::process_key_events(
+                input_mode,
+                app_event_tx,
+                quit_notify,
+            ))
+        };
 
-        {
+        let serial_port_handle = {
             let app_event_tx = app_event_tx.clone();
             let quit_notify = quit_notify.clone();
             tokio::spawn(Self::serial_port_com(
                 app_event_tx,
                 host_cmd_rx,
                 quit_notify,
-            ));
-        }
+            ))
+        };
 
         terminal.draw(|frame| self.draw(frame))?;
         loop {
@@ -316,13 +318,13 @@ impl App {
                 event
             } else {
                 quit_notify.cancel();
-                return Ok(());
+                break;
             };
 
             match event {
                 AppEvent::Exit => {
                     quit_notify.cancel();
-                    return Ok(());
+                    break;
                 }
                 AppEvent::SetInputMode(mode) => {
                     self.input_mode = mode;
@@ -376,6 +378,11 @@ impl App {
 
             terminal.draw(|frame| self.draw(frame))?;
         }
+
+        key_event_handle.await??;
+        serial_port_handle.await??;
+
+        Ok(())
     }
 
     fn draw(&self, frame: &mut Frame) {
