@@ -1,5 +1,11 @@
 #![no_std]
 
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "std")]
+mod parse;
+
 const COM_INIT_STR: &str = "MICROSCOPE_COM_v0.1";
 
 pub enum Error {

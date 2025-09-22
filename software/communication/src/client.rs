@@ -196,10 +196,10 @@ impl App {
         let messages: Vec<ListItem> = self
             .messages
             .iter()
-            .rev()
             .enumerate()
+            .rev()
             .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{i}: {m}")));
+                let content = Line::from(Span::raw(format!("{i:04}: {m}")));
                 ListItem::new(content)
             })
             .collect();

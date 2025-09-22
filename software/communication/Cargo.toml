@@ -7,18 +7,22 @@ edition = "2024"
 name = "communication"
 path = "src/lib.rs"
 
-[[example]]
+[features]
+default = ["std", "client"]
+client = ["anyhow", "clap", "ratatui", "tokio", "regex", "std"]
+std = []
+
+[[bin]]
 name = "com-client"
 path = "src/client.rs"
-
-[dev-dependencies]
-anyhow = "1.0.100"
-clap = { version = "4.5.48", features = ["derive"] }
-ratatui = "0.29.0"
-tokio = "1.47.1"
-
+required-features = ["client"]
 
 [dependencies]
 cobs = { version = "0.4.0", default-features = false, features = ["alloc"] }
 postcard = "1.1.3"
 serde = { version = "1.0.226", features = ["derive"], default-features = false }
+anyhow = { version = "1.0.100", optional = true }
+clap = { version = "4.5.48", features = ["derive"], optional = true }
+ratatui = { version = "0.29.0", optional = true }
+tokio = { version = "1.47.1", optional = true }
+regex = { version = "1.11.2", optional = true }
