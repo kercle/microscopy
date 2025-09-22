@@ -16,6 +16,11 @@ pub fn encode_bytes<T: Serialize>(obj: &T, buffer: &mut [u8]) -> Result<usize, E
 
 pub fn decode_bytes<T: DeserializeOwned>(data: &[u8]) -> Result<T, Error> {
     let mut cloned_data: [u8; 256] = [0; 256];
-    cloned_data.clone_from_slice(data);
+
+    if data.len() > cloned_data.len() {
+        return Err(Error::BufferTooSmall);
+    }
+
+    cloned_data[..data.len()].clone_from_slice(data);
     postcard::from_bytes_cobs(&mut cloned_data).map_err(|_| Error::InvalidCommand)
 }

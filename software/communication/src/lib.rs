@@ -39,8 +39,7 @@ impl<StrType: Serialize + DeserializeOwned> DeviceEvent<StrType> {
                 let msg = COM_INIT_STR.as_bytes();
                 if buffer.len() >= msg.len() {
                     buffer[..msg.len()].copy_from_slice(msg);
-                    buffer[msg.len()] = 0; // Null-terminate
-                    Ok(msg.len() + 1)
+                    Ok(msg.len())
                 } else {
                     Err(Error::BufferTooSmall)
                 }

@@ -160,6 +160,39 @@ impl App {
             })?;
 
             if connection_established {
+                tokio::fs::write("/tmp/last_serial_packet.bin", &serial_data).await?;
+                if let Some(pos) = serial_data.iter().position(|&x| x == b'\0') {
+                    let packet = serial_data.drain(..=pos).collect::<Vec<u8>>();
+                    // tokio::fs::write("/tmp/last_serial_packet.bin", &serial_data).await?;
+                    let decoded = DeviceEvent::decode_bytes(&packet);
+
+                    if decoded.is_err() {
+                        app_event_tx
+                            .try_send(AppEvent::SubmitSerialMessage(format!(
+                                "Failed to decode package: {:?}",
+                                decoded.err()
+                            )))
+                            .ok();
+                        continue;
+                    }
+
+                    let decoded = decoded.unwrap();
+
+                    match decoded {
+                        DeviceEvent::LogMessage { level, message } => {
+                            app_event_tx
+                                .try_send(AppEvent::SubmitSerialMessage(message))
+                                .ok();
+                        }
+                        _ => {
+                            app_event_tx
+                                .try_send(AppEvent::SubmitSerialMessage(
+                                    "unimplemented device event.".into(),
+                                ))
+                                .ok();
+                        }
+                    }
+                }
             } else {
                 let mut init_packet: [u8; 64] = [0; 64];
                 let init_package_size =
@@ -169,7 +202,10 @@ impl App {
 
                 for i in 0..serial_data.len() - init_package_size + 1 {
                     if serial_data[i..].starts_with(&init_packet[..init_package_size]) {
-                        serial_data.drain(..i + init_package_size);
+                        serial_data.drain(..i + init_package_size + 1); // +1 to also remove the null terminator
+
+                        tokio::fs::write("/tmp/after_drained.bin", &serial_data).await?;
+
                         connection_established = true;
                         app_event_tx
                             .try_send(AppEvent::SubmitSerialMessage(

@@ -20,7 +20,7 @@ use embassy_time::{Duration, Timer};
 use communication::StageMotorCmd;
 use heapless::{String, Vec};
 
-type DeviceEvent = communication::DeviceEvent<String<64>>;
+type DeviceEvent = communication::DeviceEvent<String<128>>;
 
 struct Channels {
     stage_motor: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
@@ -48,18 +48,39 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[embassy_executor::task]
+async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
+    let mut buffer = [0u8; 512];
+
+    loop {
+        match CHANNELS
+            ._device_events
+            .try_receive()
+        {
+            Ok(event) => {
+                let len = event
+                    .encode_bytes(&mut buffer)
+                    .expect("Buffer too small for event");
+                let _ = tx.write_async(&buffer[..len]).await;
+                let _ = tx.write_async(&[0u8]).await; // Null-terminate
+                let _ = tx.flush_async().await;
+            }
+            Err(_) => {
+                Timer::after(Duration::from_millis(20)).await;
+            }
+        }
+    }
+}
+
+#[embassy_executor::task]
 async fn uart_rx_task(
     mut rx: UartRx<'static, esp_hal::Async>,
-    mut tx: UartTx<'static, esp_hal::Async>,
 ) {
     let mut buffer = [0u8; 64];
 
-    let len = DeviceEvent::InitSignature
-        .encode_bytes(&mut buffer)
-        .expect("Buffer too small for init string");
-
-    let _ = tx.write_async(&buffer[..len]).await;
-    let _ = tx.flush_async();
+    CHANNELS
+        ._device_events
+        .try_send(DeviceEvent::InitSignature)
+        .ok();
 
     let mut buf = [0u8; 64];
     let mut packet = Vec::<u8, 256>::new();
@@ -143,6 +164,19 @@ async fn motor_task(
     }
 }
 
+#[embassy_executor::task]
+async fn test_log_messages() {
+    loop {
+        let log_event = DeviceEvent::LogMessage {
+            level: communication::LogMessageLevel::Warning,
+            message: String::try_from("Hello world!").unwrap(),
+        };
+        let _ = CHANNELS._device_events.try_send(log_event);
+
+        Timer::after(Duration::from_secs(2)).await;
+    }
+}
+
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
@@ -159,7 +193,10 @@ async fn main(spawner: Spawner) {
     let timer0 = TimerGroup::new(peripherals.TIMG0);
     esp_hal_embassy::init(timer0.timer0);
 
-    spawner.must_spawn(uart_rx_task(rx0, tx0));
+    spawner.must_spawn(uart_tx_task(tx0));
+    spawner.must_spawn(uart_rx_task(rx0));
+
+    spawner.must_spawn(test_log_messages());
     spawner.must_spawn(motor_task(
         Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default()),
         Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default()),
