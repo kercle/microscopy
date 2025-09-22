@@ -25,6 +25,8 @@ async fn main() -> Result<()> {
 }
 
 struct App {
+    history_cursor: usize,
+    input_history: Vec<String>,
     input: String,
     character_index: usize,
     input_mode: InputMode,
@@ -46,11 +48,15 @@ enum AppEvent {
     DeleteChar,
     MoveCursorLeft,
     MoveCursorRight,
+    ScrollUpHistory,
+    ScrollDownHistory,
 }
 
 impl App {
     fn new() -> Self {
         Self {
+            history_cursor: 0,
+            input_history: Vec::new(),
             input: String::new(),
             input_mode: InputMode::Monitor,
             messages: Vec::new(),
@@ -262,6 +268,8 @@ impl App {
                         KeyCode::Backspace => app_event_tx.send(AppEvent::DeleteChar).await?,
                         KeyCode::Left => app_event_tx.send(AppEvent::MoveCursorLeft).await?,
                         KeyCode::Right => app_event_tx.send(AppEvent::MoveCursorRight).await?,
+                        KeyCode::Up => app_event_tx.send(AppEvent::ScrollUpHistory).await?,
+                        KeyCode::Down => app_event_tx.send(AppEvent::ScrollDownHistory).await?,
                         KeyCode::Esc => {
                             app_event_tx
                                 .send(AppEvent::SetInputMode(InputMode::Monitor))
@@ -327,6 +335,8 @@ impl App {
                         self.messages.push(format!("Failed to parse command: {e}"));
                     } else {
                         host_cmd_tx.send(packet.unwrap()).await?;
+                        self.input_history.push(input.clone());
+                        self.history_cursor = self.input_history.len();
                         self.submit_message(input).await;
                     }
                 }
@@ -344,6 +354,23 @@ impl App {
                 }
                 AppEvent::MoveCursorRight => {
                     self.move_cursor_right();
+                }
+                AppEvent::ScrollUpHistory => {
+                    if self.history_cursor == 0 {
+                        continue;
+                    }
+
+                    self.history_cursor -= 1;
+                    self.input = self.input_history[self.history_cursor].clone();
+                }
+                AppEvent::ScrollDownHistory => {
+                    self.history_cursor = (self.history_cursor + 1).min(self.input_history.len());
+
+                    if self.history_cursor == self.input_history.len() {
+                        self.input.clear();
+                    } else {
+                        self.input = self.input_history[self.history_cursor].clone();
+                    }
                 }
             }
 
