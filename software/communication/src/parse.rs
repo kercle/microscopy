@@ -35,6 +35,14 @@ impl StageMotorCmd {
             None
         }
     }
+
+    fn parse_stop(s: &str) -> Option<Self> {
+        if s.trim() == "stop" {
+            Some(StageMotorCmd::Stop)
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for StageMotorCmd {
@@ -46,6 +54,9 @@ impl fmt::Display for StageMotorCmd {
             } => {
                 write!(f, "steps:{},{}", steps, step_delay_us)
             }
+            StageMotorCmd::Stop => {
+                write!(f, "stop")
+            }
         }
     }
 }
@@ -55,6 +66,8 @@ impl FromStr for StageMotorCmd {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(cmd) = StageMotorCmd::parse_move_steps(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_stop(s) {
             Ok(cmd)
         } else {
             Err("Invalid StageMotorCmd format".to_string())
