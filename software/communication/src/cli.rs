@@ -1,6 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
-use communication::HostCommand;
+use communication::{HostCommand, driver::DeviceDriver};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -128,15 +128,19 @@ impl App {
         self.reset_cursor();
     }
 
-    async fn reset_microcontroller(
-        mut port: Box<dyn serialport::SerialPort>,
-    ) -> serialport::Result<()> {
-        port.write_data_terminal_ready(false)?;
-
-        port.write_request_to_send(true)?;
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        port.write_request_to_send(false)?;
-        Ok(())
+    async fn display_device_event(
+        app_event_tx: &mpsc::Sender<AppEvent>,
+        event: DeviceEvent,
+    ) -> Result<()> {
+        match event {
+            DeviceEvent::LogMessage { level: _, message } => {
+                app_event_tx.try_send(AppEvent::SerialMessage(message))
+            }
+            _ => app_event_tx.try_send(AppEvent::SerialMessage(
+                "unimplemented device event.".into(),
+            )),
+        }
+        .map_err(|e| anyhow::anyhow!("Failed to send device event: {e}"))
     }
 
     async fn serial_port_com(
@@ -146,87 +150,29 @@ impl App {
     ) -> Result<()> {
         // TODO: Make port configurable
 
-        let mut port = serialport::new("/dev/ttyUSB0", 115_200)
-            .timeout(Duration::from_millis(10))
-            .open()
-            .expect("Failed to open port");
+        let mut driver = DeviceDriver::new(std::path::Path::new("/dev/ttyUSB0"), 115_200)?;
+        driver.reset()?;
 
-        Self::reset_microcontroller(port.try_clone()?).await?;
+        while !driver.connection_established::<String>() {
+            if quit_notify.is_cancelled() {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
 
-        let mut serial_data: Vec<u8> = Vec::new();
-        let mut connection_established = false;
+        app_event_tx
+            .try_send(AppEvent::SerialMessage(
+                "Connection to device established.".into(),
+            ))
+            .ok();
+
         while !quit_notify.is_cancelled() {
             while let Ok(cmd) = host_cmd_rx.try_recv() {
-                let mut buffer: [u8; 256] = [0; 256];
-                let packet_size = cmd
-                    .encode_bytes(&mut buffer)
-                    .map_err(|e| anyhow::anyhow!("Failed to encode command: {:?}", e))?;
-                port.write_all(&buffer[..packet_size])?;
-                port.write_all(&[0u8])?; // Null-terminate
-                port.flush()?;
+                driver.send_command(cmd)?;
             }
 
-            if port.bytes_to_read()? == 0 {
-                tokio::time::sleep(Duration::from_millis(20)).await;
-                continue;
-            }
-
-            let mut serial_buf: [u8; 1024 * 1024] = [0; 1024 * 1024];
-            port.read(&mut serial_buf)
-                .inspect(|&n| serial_data.extend_from_slice(&serial_buf[..n]))?;
-
-            if connection_established {
-                tokio::fs::write("/tmp/last_serial_packet.bin", &serial_data).await?;
-                if let Some(pos) = serial_data.iter().position(|&x| x == b'\0') {
-                    let packet = serial_data.drain(..=pos).collect::<Vec<u8>>();
-                    // tokio::fs::write("/tmp/last_serial_packet.bin", &serial_data).await?;
-                    let decoded = DeviceEvent::decode_bytes(&packet);
-
-                    if decoded.is_err() {
-                        app_event_tx
-                            .try_send(AppEvent::SerialMessage(format!(
-                                "Failed to decode package: {:?}",
-                                decoded.err()
-                            )))
-                            .ok();
-                        continue;
-                    }
-
-                    let decoded = decoded.unwrap();
-
-                    match decoded {
-                        DeviceEvent::LogMessage { level: _, message } => {
-                            app_event_tx.try_send(AppEvent::SerialMessage(message)).ok();
-                        }
-                        _ => {
-                            app_event_tx
-                                .try_send(AppEvent::SerialMessage(
-                                    "unimplemented device event.".into(),
-                                ))
-                                .ok();
-                        }
-                    }
-                }
-            } else {
-                let mut init_packet: [u8; 64] = [0; 64];
-                let init_package_size =
-                    DeviceEvent::InitSignature
-                        .encode_bytes(&mut init_packet)
-                        .map_err(|e| anyhow::anyhow!("Failed to encode init package: {:?}", e))?;
-
-                for i in 0..serial_data.len() - init_package_size + 1 {
-                    if serial_data[i..].starts_with(&init_packet[..init_package_size]) {
-                        serial_data.drain(..i + init_package_size + 1); // +1 to also remove the null terminator
-
-                        tokio::fs::write("/tmp/after_drained.bin", &serial_data).await?;
-
-                        connection_established = true;
-                        app_event_tx
-                            .try_send(AppEvent::SerialMessage("Connection established".into()))
-                            .ok();
-                        break;
-                    }
-                }
+            if let Some(event) = driver.recv_event::<String>()? {
+                Self::display_device_event(&app_event_tx, event).await?;
             }
         }
 

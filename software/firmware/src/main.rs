@@ -55,6 +55,11 @@ esp_bootloader_esp_idf::esp_app_desc!();
 async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
     let mut buffer = [0u8; 512];
 
+    CHANNELS.send_device_event(DeviceEvent::LogMessage {
+        level: communication::LogMessageLevel::Info,
+        message: String::try_from("Firmware started.").unwrap(),
+    });
+
     loop {
         match CHANNELS._device_events.try_receive() {
             Ok(event) => {
@@ -123,6 +128,11 @@ async fn motor_task(
                 steps,
                 step_delay_us,
             }) => {
+                let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+                    level: communication::LogMessageLevel::Info,
+                    message: String::try_from("Moving stage along Z axis.").unwrap(),
+                });
+
                 if steps > 0 {
                     dir.set_high();
                 } else {
@@ -147,6 +157,17 @@ async fn motor_task(
     }
 }
 
+#[embassy_executor::task]
+async fn _debug_msg_task() {
+    loop {
+        Timer::after(Duration::from_secs(2)).await;
+        CHANNELS.send_device_event(DeviceEvent::LogMessage {
+            level: communication::LogMessageLevel::Info,
+            message: String::try_from("Debug message from firmware.").unwrap(),
+        });
+    }
+}
+
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
@@ -165,6 +186,7 @@ async fn main(spawner: Spawner) {
 
     spawner.must_spawn(uart_tx_task(tx0));
     spawner.must_spawn(uart_rx_task(rx0));
+    // spawner.must_spawn(_debug_msg_task());
     spawner.must_spawn(motor_task(
         Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default()),
         Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default()),

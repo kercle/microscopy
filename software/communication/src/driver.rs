@@ -1,34 +1,33 @@
 use std::boxed::Box;
 use std::path::Path;
-use std::string::String;
 use std::vec::Vec;
 
 use anyhow::Result;
 use serde::{Serialize, de::DeserializeOwned};
 use serialport::SerialPort;
 
-use crate::DeviceEvent;
+use crate::{DeviceEvent, HostCommand};
 
 type EventBuffer = [u8; 4096];
 
 pub struct DeviceDriver {
-    port: Box<dyn SerialPort>,
-    buffer: Vec<u8>,
-    signature_received: bool,
+    pub port: Box<dyn SerialPort>,
+    pub buffer: Vec<u8>,
+    pub signature_received: bool,
 }
 
 impl DeviceDriver {
     pub fn new(serial_port: &Path, baud_rate: u32) -> Result<Self> {
         Ok(DeviceDriver {
             port: serialport::new(serial_port.to_str().unwrap(), baud_rate)
-                .timeout(std::time::Duration::from_millis(100))
+                .timeout(std::time::Duration::from_millis(10))
                 .open()?,
             buffer: Vec::new(),
             signature_received: false,
         })
     }
 
-    fn reset(&mut self) -> serialport::Result<()> {
+    pub fn reset(&mut self) -> serialport::Result<()> {
         self.port.write_data_terminal_ready(false)?;
 
         self.port.write_request_to_send(true)?;
@@ -38,14 +37,14 @@ impl DeviceDriver {
     }
 
     fn verify_signature<StrType: Serialize + DeserializeOwned>(&mut self) -> bool {
-        if self.signature_received {
-            return true;
-        }
-
         let mut init_packet: EventBuffer = [0; 4096];
         let init_package_size = DeviceEvent::<StrType>::InitSignature
             .encode_bytes(&mut init_packet)
             .unwrap();
+
+        if self.buffer.len() < init_package_size + 1 {
+            return false;
+        }
 
         for i in 0..self.buffer.len() - init_package_size + 1 {
             if self.buffer[i..].starts_with(&init_packet[..init_package_size]) {
@@ -58,10 +57,37 @@ impl DeviceDriver {
         false
     }
 
+    pub fn extend_buffer(&mut self) -> Result<usize> {
+        let bytes_available = self.port.bytes_to_read()?;
+        if bytes_available == 0 {
+            return Ok(0);
+        }
+
+        let mut buf = std::vec![0u8; bytes_available as usize];
+        let n = self
+            .port
+            .read(&mut buf)
+            .inspect(|&n| self.buffer.extend_from_slice(&buf[..n]))?;
+
+        Ok(n)
+    }
+
+    pub fn connection_established<StrType: Serialize + DeserializeOwned>(&mut self) -> bool {
+        if self.signature_received {
+            return true;
+        }
+
+        if self.extend_buffer().is_ok() {
+            self.verify_signature::<StrType>()
+        } else {
+            false
+        }
+    }
+
     fn decode_next_event<StrType: Serialize + DeserializeOwned>(
         &mut self,
     ) -> Result<Option<DeviceEvent<StrType>>> {
-        if !self.verify_signature::<StrType>() {
+        if !self.connection_established::<StrType>() {
             return Ok(None);
         }
 
@@ -80,14 +106,19 @@ impl DeviceDriver {
     pub fn recv_event<StrType: Serialize + DeserializeOwned>(
         &mut self,
     ) -> Result<Option<DeviceEvent<StrType>>> {
-        let bytes_available = self.port.bytes_to_read()?;
-
-        if bytes_available > 0 {
-            let mut buf = Vec::with_capacity(bytes_available as usize);
-            let n = self.port.read(&mut buf)?;
-            self.buffer.extend_from_slice(&buf[..n]);
-        }
-
+        self.extend_buffer()?;
         self.decode_next_event()
+    }
+
+    pub fn send_command(&mut self, cmd: HostCommand) -> Result<()> {
+        let mut buffer: EventBuffer = [0; 4096];
+        let packet_size = cmd
+            .encode_bytes(&mut buffer)
+            .map_err(|e| anyhow::anyhow!("Failed to encode command: {:?}", e))?;
+        self.port.write_all(&buffer[..packet_size])?;
+        self.port.write_all(&[0u8])?; // Null-terminate
+        self.port.flush()?;
+
+        Ok(())
     }
 }
