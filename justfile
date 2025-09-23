@@ -8,7 +8,7 @@ deploy target_host:
 serve: serve-backend serve-frontend
 
 serve-backend:
-    cargo run -- serve
+    cargo run --bin control-app -- serve
 
 [working-directory: "software/frontend"]
 serve-frontend:

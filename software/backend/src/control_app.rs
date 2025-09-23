@@ -1,11 +1,12 @@
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
+use communication::driver::DeviceDriver;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
 use std::sync::Arc;
-use tokio::sync::{RwLock, broadcast, watch};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tracing::warn;
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
@@ -27,6 +28,8 @@ pub struct AppState {
 
     pipeline: gst::Pipeline,
     logs: Arc<RwLock<Vec<LogEntry>>>,
+
+    pub device_driver: Option<Arc<Mutex<DeviceDriver>>>,
 
     pub parameters_controller: Arc<RwLock<ParametersController>>,
 }
@@ -98,6 +101,7 @@ impl AppState {
     pub async fn new(
         frame_rx: watch::Receiver<Arc<Bytes>>,
         logs: Arc<RwLock<Vec<LogEntry>>>,
+        device_driver: Option<Arc<Mutex<DeviceDriver>>>,
         parameters: ParametersController,
     ) -> Result<AppState> {
         let (logs_tx, _logs_rx) = broadcast::channel(MAX_LOG_ENTRIES);
@@ -108,6 +112,7 @@ impl AppState {
             logs,
             pipeline: AppState::create_pipeline()?,
             parameters_controller: Arc::new(RwLock::new(parameters)),
+            device_driver,
         };
 
         app_state.set_awb_enable(true);
