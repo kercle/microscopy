@@ -14,79 +14,14 @@ use esp_hal::{
 };
 
 use embassy_executor::Spawner;
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, TryReceiveError, TrySendError},
-    signal::Signal,
-};
 use embassy_time::{Duration, Timer};
 
-use communication::StageMotorCmd;
 use heapless::{String, Vec};
 
-type DeviceEvent = communication::DeviceEvent<String<128>>;
+mod com;
+mod drivers;
 
-struct StageMotorState {
-    commands: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
-    stop: Signal<CriticalSectionRawMutex, ()>,
-}
-
-impl StageMotorState {
-    const fn new() -> Self {
-        Self {
-            commands: Channel::new(),
-            stop: Signal::new(),
-        }
-    }
-
-    fn send_command(&self, cmd: StageMotorCmd) -> Result<(), TrySendError<StageMotorCmd>> {
-        if let StageMotorCmd::Stop = cmd {
-            self.request_stop();
-            return Ok(());
-        }
-
-        self.commands.try_send(cmd)
-    }
-
-    fn recv_command(&self) -> Result<StageMotorCmd, TryReceiveError> {
-        if self.stop.signaled() {
-            self.stop.reset();
-            return Err(TryReceiveError::Empty);
-        }
-
-        self.commands.try_receive()
-    }
-
-    fn request_stop(&self) {
-        self.stop.signal(());
-        self.commands.clear();
-    }
-
-    fn stop(&self) -> bool {
-        let stopped = self.stop.signaled();
-        self.stop.reset();
-        stopped
-    }
-}
-
-struct Channels {
-    device_events: Channel<CriticalSectionRawMutex, DeviceEvent, 16>,
-}
-
-impl Channels {
-    const fn new() -> Self {
-        Self {
-            device_events: Channel::new(),
-        }
-    }
-
-    fn send_device_event(&self, event: DeviceEvent) {
-        let _ = self.device_events.try_send(event);
-    }
-}
-
-static CHANNELS: Channels = Channels::new();
-static STAGE_MOTOR: StageMotorState = StageMotorState::new();
+use crate::com::DeviceEvent;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -101,13 +36,13 @@ esp_bootloader_esp_idf::esp_app_desc!();
 async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
     let mut buffer = [0u8; 512];
 
-    CHANNELS.send_device_event(DeviceEvent::LogMessage {
+    com::CHANNELS.send_device_event(DeviceEvent::LogMessage {
         level: communication::LogMessageLevel::Info,
         message: String::try_from("Firmware started.").unwrap(),
     });
 
     loop {
-        match CHANNELS.device_events.try_receive() {
+        match com::CHANNELS.device_events.try_receive() {
             Ok(event) => {
                 let len = event
                     .encode_bytes(&mut buffer)
@@ -125,7 +60,7 @@ async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
 
 #[embassy_executor::task]
 async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
-    CHANNELS
+    com::CHANNELS
         .device_events
         .try_send(DeviceEvent::InitSignature)
         .ok();
@@ -151,11 +86,11 @@ async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
         if let Ok(cmd) = communication::HostCommand::decode_bytes(cmd_slice) {
             match cmd {
                 communication::HostCommand::StageMotor(motor_cmd) => {
-                    let _ = STAGE_MOTOR.send_command(motor_cmd);
+                    let _ = drivers::stage::StageMotor::send_command(motor_cmd);
                 }
             }
         } else {
-            let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+            let _ = com::CHANNELS.send_device_event(DeviceEvent::LogMessage {
                 level: communication::LogMessageLevel::Error,
                 message: String::try_from("Failed to parse command.").unwrap(),
             });
@@ -167,60 +102,10 @@ async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
 }
 
 #[embassy_executor::task]
-async fn motor_task(
-    mut step: Output<'static>,
-    mut dir: Output<'static>,
-    _ms1: Output<'static>,
-    _ms2: Output<'static>,
-) {
-    loop {
-        match STAGE_MOTOR.recv_command() {
-            Ok(StageMotorCmd::MoveSteps {
-                steps,
-                step_delay_us,
-            }) => {
-                let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
-                    level: communication::LogMessageLevel::Info,
-                    message: String::try_from("Moving stage along Z axis.").unwrap(),
-                });
-
-                if steps > 0 {
-                    dir.set_high();
-                } else {
-                    dir.set_low();
-                }
-                for _ in 0..steps.abs() {
-                    if STAGE_MOTOR.stop() {
-                        let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
-                            level: communication::LogMessageLevel::Info,
-                            message: String::try_from("Stage movement stopped.").unwrap(),
-                        });
-                        break;
-                    }
-
-                    step.set_high();
-                    Timer::after(Duration::from_micros(step_delay_us as u64)).await;
-                    step.set_low();
-                    Timer::after(Duration::from_micros(step_delay_us as u64)).await;
-                }
-
-                let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
-                    level: communication::LogMessageLevel::Info,
-                    message: String::try_from("Stage moved to new position.").unwrap(),
-                });
-            }
-            _ => {}
-        }
-
-        Timer::after(Duration::from_millis(20)).await;
-    }
-}
-
-#[embassy_executor::task]
 async fn _debug_msg_task() {
     loop {
         Timer::after(Duration::from_secs(2)).await;
-        CHANNELS.send_device_event(DeviceEvent::LogMessage {
+        com::CHANNELS.send_device_event(DeviceEvent::LogMessage {
             level: communication::LogMessageLevel::Info,
             message: String::try_from("Debug message from firmware.").unwrap(),
         });
@@ -246,7 +131,7 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(uart_tx_task(tx0));
     spawner.must_spawn(uart_rx_task(rx0));
     // spawner.must_spawn(_debug_msg_task());
-    spawner.must_spawn(motor_task(
+    spawner.must_spawn(drivers::stage::motor_task(
         Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default()),
         Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default()),
         Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default()),
