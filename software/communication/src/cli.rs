@@ -24,13 +24,22 @@ async fn main() -> Result<()> {
     app_result
 }
 
+enum Message {
+    HostCommand(HostCommand),
+    DeviceEvent(DeviceEvent),
+    HostLog {
+        level: communication::LogMessageLevel,
+        message: String,
+    },
+}
+
 struct App {
     history_cursor: usize,
     input_history: Vec<String>,
     input: String,
     character_index: usize,
     input_mode: InputMode,
-    messages: Vec<String>,
+    messages: Vec<Message>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +52,7 @@ enum AppEvent {
     Exit,
     SetInputMode(InputMode),
     SubmitCommand,
-    SerialMessage(String),
+    DisplayMessage(Message),
     EnterChar(char),
     DeleteChar,
     MoveCursorLeft,
@@ -122,26 +131,26 @@ impl App {
         self.character_index = 0;
     }
 
-    async fn submit_message(&mut self, message: String) {
+    async fn submit_message(&mut self, message: Message) {
         self.messages.push(message);
         self.input.clear();
         self.reset_cursor();
     }
 
-    async fn display_device_event(
-        app_event_tx: &mpsc::Sender<AppEvent>,
-        event: DeviceEvent,
-    ) -> Result<()> {
-        match event {
-            DeviceEvent::LogMessage { level: _, message } => {
-                app_event_tx.try_send(AppEvent::SerialMessage(message))
-            }
-            _ => app_event_tx.try_send(AppEvent::SerialMessage(
-                "unimplemented device event.".into(),
-            )),
-        }
-        .map_err(|e| anyhow::anyhow!("Failed to send device event: {e}"))
-    }
+    // async fn display_device_event(
+    //     app_event_tx: &mpsc::Sender<AppEvent>,
+    //     event: DeviceEvent,
+    // ) -> Result<()> {
+    //     match event {
+    //         DeviceEvent::LogMessage { level: _, message } => {
+    //             app_event_tx.try_send(AppEvent::DisplayMessage(message))
+    //         }
+    //         _ => app_event_tx.try_send(AppEvent::DisplayMessage(
+    //             "unimplemented device event.".into(),
+    //         )),
+    //     }
+    //     .map_err(|e| anyhow::anyhow!("Failed to send device event: {e}"))
+    // }
 
     async fn serial_port_com(
         app_event_tx: mpsc::Sender<AppEvent>,
@@ -161,9 +170,10 @@ impl App {
         }
 
         app_event_tx
-            .try_send(AppEvent::SerialMessage(
-                "Connection to device established.".into(),
-            ))
+            .try_send(AppEvent::DisplayMessage(Message::HostLog {
+                level: communication::LogMessageLevel::Info,
+                message: "Connection established.".into(),
+            }))
             .ok();
 
         while !quit_notify.is_cancelled() {
@@ -172,7 +182,11 @@ impl App {
             }
 
             if let Some(event) = driver.recv_event::<String>()? {
-                Self::display_device_event(&app_event_tx, event).await?;
+                app_event_tx
+                    .send(AppEvent::DisplayMessage(Message::DeviceEvent(event)))
+                    .await?;
+            } else {
+                tokio::time::sleep(Duration::from_millis(20)).await;
             }
         }
 
@@ -280,15 +294,19 @@ impl App {
                     let packet = HostCommand::from_str(input.as_str());
 
                     if let Err(e) = packet {
-                        self.messages.push(format!("Failed to parse command: {e}"));
+                        self.messages.push(Message::HostLog {
+                            level: communication::LogMessageLevel::Error,
+                            message: format!("Failed to parse command: {e}"),
+                        });
                     } else {
-                        host_cmd_tx.send(packet.unwrap()).await?;
+                        let packet = packet.unwrap();
+                        host_cmd_tx.send(packet.clone()).await?;
                         self.input_history.push(input.clone());
                         self.history_cursor = self.input_history.len();
-                        self.submit_message(input).await;
+                        self.submit_message(Message::HostCommand(packet)).await;
                     }
                 }
-                AppEvent::SerialMessage(msg) => {
+                AppEvent::DisplayMessage(msg) => {
                     self.messages.push(msg);
                 }
                 AppEvent::EnterChar(c) => {
@@ -388,16 +406,69 @@ impl App {
             )),
         }
 
-        let messages: Vec<ListItem> = self
-            .messages
-            .iter()
-            .enumerate()
-            .rev()
-            .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{i:04}: {m}")));
-                ListItem::new(content)
-            })
-            .collect();
+        let mut messages: Vec<ListItem> = Vec::new();
+
+        let mut device_idx = 0;
+        let mut host_idx = 0;
+
+        for msg in self.messages.iter() {
+            match msg {
+                Message::HostCommand(cmd) => {
+                    host_idx += 1;
+                    let msg = vec![
+                        " ⇨ ".bold().green(),
+                        format!("{host_idx:04}").green(),
+                        " ".into(),
+                        cmd.to_string().bold(),
+                    ];
+                    messages.push(ListItem::new(Line::from(msg)));
+                }
+                Message::DeviceEvent(event) => {
+                    device_idx += 1;
+                    let mut msg = vec![
+                        " ⇦ ".bold().magenta(),
+                        format!("{device_idx:04}").magenta(),
+                        " ".into(),
+                    ];
+
+                    match event {
+                        DeviceEvent::LogMessage { level, message } => {
+                            let prefix = match level {
+                                communication::LogMessageLevel::Info => "[INFO]".blue(),
+                                communication::LogMessageLevel::Warning => "[WARN]".yellow(),
+                                communication::LogMessageLevel::Error => "[ERROR]".red(),
+                            };
+                            msg.push(prefix.into());
+                            msg.push(" ".into());
+                            msg.push(message.into());
+                        }
+                        _ => {
+                            msg.push("<?>".into());
+                        }
+                    }
+
+                    messages.push(ListItem::new(Line::from(msg)));
+                }
+                Message::HostLog { level, message } => {
+                    let prefix = match level {
+                        communication::LogMessageLevel::Info => "[INFO]".blue(),
+                        communication::LogMessageLevel::Warning => "[WARN]".yellow(),
+                        communication::LogMessageLevel::Error => "[ERROR]".red(),
+                    };
+                    let msg = vec![
+                        " ⊙ ".bold().dim(),
+                        "---- ".dim(),
+                        prefix.into(),
+                        " ".into(),
+                        message.into(),
+                    ];
+                    messages.push(ListItem::new(Line::from(msg)));
+                }
+            }
+        }
+
+        messages.reverse();
+
         let messages = List::new(messages).block(Block::bordered().title("Events"));
         frame.render_widget(messages, messages_area);
     }
