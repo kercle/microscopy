@@ -43,6 +43,70 @@ impl StageMotorCmd {
             None
         }
     }
+
+    fn parse_set_lower_limit(s: &str) -> Option<Self> {
+        if s.trim() == "set_lower_limit" {
+            Some(StageMotorCmd::SetLowerLimit)
+        } else {
+            None
+        }
+    }
+
+    fn parse_set_upper_limit(s: &str) -> Option<Self> {
+        if s.trim() == "set_upper_limit" {
+            Some(StageMotorCmd::SetUpperLimit)
+        } else {
+            None
+        }
+    }
+
+    fn parse_release_limits(s: &str) -> Option<Self> {
+        if s.trim() == "release_limits" {
+            Some(StageMotorCmd::ReleaseLimits)
+        } else {
+            None
+        }
+    }
+
+    fn parse_go_to_lower_limit(s: &str) -> Option<Self> {
+        let r = Regex::new(r"^goto_lower_limit:(\d+)$").unwrap();
+
+        if let Some(caps) = r.captures(s) {
+            let step_delay_us = if let Some(delay_str) = caps.get(1) {
+                delay_str.as_str().parse::<u32>().ok()
+            } else {
+                return None;
+            };
+
+            if let Some(step_delay_us) = step_delay_us {
+                Some(StageMotorCmd::GoToLowerLimit { step_delay_us })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn parse_go_to_upper_limit(s: &str) -> Option<Self> {
+        let r = Regex::new(r"^goto_upper_limit:(\d+)$").unwrap();
+
+        if let Some(caps) = r.captures(s) {
+            let step_delay_us = if let Some(delay_str) = caps.get(1) {
+                delay_str.as_str().parse::<u32>().ok()
+            } else {
+                return None;
+            };
+
+            if let Some(step_delay_us) = step_delay_us {
+                Some(StageMotorCmd::GoToUpperLimit { step_delay_us })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for StageMotorCmd {
@@ -57,6 +121,21 @@ impl fmt::Display for StageMotorCmd {
             StageMotorCmd::Stop => {
                 write!(f, "stop")
             }
+            StageMotorCmd::SetLowerLimit => {
+                write!(f, "set_lower_limit")
+            }
+            StageMotorCmd::SetUpperLimit => {
+                write!(f, "set_upper_limit")
+            }
+            StageMotorCmd::ReleaseLimits => {
+                write!(f, "release_limits")
+            }
+            StageMotorCmd::GoToLowerLimit { step_delay_us } => {
+                write!(f, "goto_lower_limit:{}", step_delay_us)
+            }
+            StageMotorCmd::GoToUpperLimit { step_delay_us } => {
+                write!(f, "goto_upper_limit:{}", step_delay_us)
+            }
         }
     }
 }
@@ -68,6 +147,16 @@ impl FromStr for StageMotorCmd {
         if let Some(cmd) = StageMotorCmd::parse_move_steps(s) {
             Ok(cmd)
         } else if let Some(cmd) = StageMotorCmd::parse_stop(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_set_lower_limit(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_set_upper_limit(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_release_limits(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_go_to_lower_limit(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_go_to_upper_limit(s) {
             Ok(cmd)
         } else {
             Err("Invalid StageMotorCmd format".to_string())
