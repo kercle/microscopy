@@ -28,3 +28,6 @@ flash:
     echo "$(pwd)"
     espflash flash --chip esp32 --port /dev/ttyUSB0 \
         "../../target/xtensa-esp32-none-elf/release/firmware"
+
+monitor device:
+    cargo run --bin com-client -- --device {{device}} --baud 115200
