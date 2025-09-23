@@ -14,7 +14,11 @@ use esp_hal::{
 };
 
 use embassy_executor::Spawner;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex,
+    channel::{Channel, TryReceiveError, TrySendError},
+    signal::Signal,
+};
 use embassy_time::{Duration, Timer};
 
 use communication::StageMotorCmd;
@@ -22,25 +26,67 @@ use heapless::{String, Vec};
 
 type DeviceEvent = communication::DeviceEvent<String<128>>;
 
+struct StageMotorState {
+    commands: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
+    stop: Signal<CriticalSectionRawMutex, ()>,
+}
+
+impl StageMotorState {
+    const fn new() -> Self {
+        Self {
+            commands: Channel::new(),
+            stop: Signal::new(),
+        }
+    }
+
+    fn send_command(&self, cmd: StageMotorCmd) -> Result<(), TrySendError<StageMotorCmd>> {
+        if let StageMotorCmd::Stop = cmd {
+            self.request_stop();
+            return Ok(());
+        }
+
+        self.commands.try_send(cmd)
+    }
+
+    fn recv_command(&self) -> Result<StageMotorCmd, TryReceiveError> {
+        if self.stop.signaled() {
+            self.stop.reset();
+            return Err(TryReceiveError::Empty);
+        }
+
+        self.commands.try_receive()
+    }
+
+    fn request_stop(&self) {
+        self.stop.signal(());
+        self.commands.clear();
+    }
+
+    fn stop(&self) -> bool {
+        let stopped = self.stop.signaled();
+        self.stop.reset();
+        stopped
+    }
+}
+
 struct Channels {
-    stage_motor: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
-    _device_events: Channel<CriticalSectionRawMutex, DeviceEvent, 16>,
+    device_events: Channel<CriticalSectionRawMutex, DeviceEvent, 16>,
 }
 
 impl Channels {
     const fn new() -> Self {
         Self {
-            stage_motor: Channel::new(),
-            _device_events: Channel::new(),
+            device_events: Channel::new(),
         }
     }
 
     fn send_device_event(&self, event: DeviceEvent) {
-        let _ = self._device_events.try_send(event);
+        let _ = self.device_events.try_send(event);
     }
 }
 
 static CHANNELS: Channels = Channels::new();
+static STAGE_MOTOR: StageMotorState = StageMotorState::new();
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -61,7 +107,7 @@ async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
     });
 
     loop {
-        match CHANNELS._device_events.try_receive() {
+        match CHANNELS.device_events.try_receive() {
             Ok(event) => {
                 let len = event
                     .encode_bytes(&mut buffer)
@@ -80,7 +126,7 @@ async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
 #[embassy_executor::task]
 async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
     CHANNELS
-        ._device_events
+        .device_events
         .try_send(DeviceEvent::InitSignature)
         .ok();
 
@@ -105,9 +151,14 @@ async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
         if let Ok(cmd) = communication::HostCommand::decode_bytes(cmd_slice) {
             match cmd {
                 communication::HostCommand::StageMotor(motor_cmd) => {
-                    let _ = CHANNELS.stage_motor.try_send(motor_cmd);
+                    let _ = STAGE_MOTOR.send_command(motor_cmd);
                 }
             }
+        } else {
+            let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+                level: communication::LogMessageLevel::Error,
+                message: String::try_from("Failed to parse command.").unwrap(),
+            });
         }
 
         // Remove the processed packet from the buffer
@@ -123,7 +174,7 @@ async fn motor_task(
     _ms2: Output<'static>,
 ) {
     loop {
-        match CHANNELS.stage_motor.try_receive() {
+        match STAGE_MOTOR.recv_command() {
             Ok(StageMotorCmd::MoveSteps {
                 steps,
                 step_delay_us,
@@ -139,6 +190,14 @@ async fn motor_task(
                     dir.set_low();
                 }
                 for _ in 0..steps.abs() {
+                    if STAGE_MOTOR.stop() {
+                        let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+                            level: communication::LogMessageLevel::Info,
+                            message: String::try_from("Stage movement stopped.").unwrap(),
+                        });
+                        break;
+                    }
+
                     step.set_high();
                     Timer::after(Duration::from_micros(step_delay_us as u64)).await;
                     step.set_low();
