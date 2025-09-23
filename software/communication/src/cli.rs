@@ -10,7 +10,7 @@ use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{Constraint, Layout, Position},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span, Text},
+    text::{Line, Text},
     widgets::{Block, List, ListItem, Paragraph},
 };
 
@@ -438,7 +438,7 @@ impl App {
                                 communication::LogMessageLevel::Warning => "[WARN]".yellow(),
                                 communication::LogMessageLevel::Error => "[ERROR]".red(),
                             };
-                            msg.push(prefix.into());
+                            msg.push(prefix);
                             msg.push(" ".into());
                             msg.push(message.into());
                         }
@@ -458,7 +458,7 @@ impl App {
                     let msg = vec![
                         " ⊙ ".bold().dim(),
                         "---- ".dim(),
-                        prefix.into(),
+                        prefix,
                         " ".into(),
                         message.into(),
                     ];
