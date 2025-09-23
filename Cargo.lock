@@ -503,6 +503,7 @@ dependencies = [
  "axum",
  "bytes",
  "chrono",
+ "communication",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
