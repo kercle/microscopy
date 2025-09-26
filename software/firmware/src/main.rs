@@ -9,7 +9,7 @@
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{
     clock::CpuClock,
-    gpio::{Level, Output, OutputConfig},
+    gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull},
     uart::{Config as UartConfig, Uart, UartRx, UartTx},
 };
 
@@ -132,10 +132,19 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(uart_rx_task(rx0));
     // spawner.must_spawn(_debug_msg_task());
     spawner.must_spawn(drivers::stage::motor_task(
-        Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default()),
-        Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default()),
-        Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default()),
-        Output::new(peripherals.GPIO33, Level::Low, OutputConfig::default()),
+        Output::new(peripherals.GPIO26, Level::Low, OutputConfig::default()), // step
+        Output::new(peripherals.GPIO25, Level::Low, OutputConfig::default()), // dir
+        Some(Output::new(
+            peripherals.GPIO27,
+            Level::High,
+            OutputConfig::default(),
+        )), // en
+        Some(Input::new(
+            peripherals.GPIO22,
+            InputConfig::default().with_pull(Pull::Down),
+        )), // end_stop_lower
+        Output::new(peripherals.GPIO32, Level::Low, OutputConfig::default()), // ms1
+        Output::new(peripherals.GPIO33, Level::Low, OutputConfig::default()), // ms2
     ));
 
     esp_alloc::heap_allocator!(size: 64 * 1024);

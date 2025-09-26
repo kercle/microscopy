@@ -23,24 +23,29 @@ impl Channels {
     }
 }
 
+// TODO: Make this private
 pub static CHANNELS: Channels = Channels::new();
 
+pub fn send_device_event(event: DeviceEvent) {
+    let _ = CHANNELS.send_device_event(event);
+}
+
 pub fn send_info(message: &str) {
-    let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+    send_device_event(DeviceEvent::LogMessage {
         level: communication::LogMessageLevel::Info,
         message: String::try_from(message).unwrap(),
     });
 }
 
 pub fn send_warning(message: &str) {
-    let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+    send_device_event(DeviceEvent::LogMessage {
         level: communication::LogMessageLevel::Warning,
         message: String::try_from(message).unwrap(),
     });
 }
 
 pub fn send_error(message: &str) {
-    let _ = CHANNELS.send_device_event(DeviceEvent::LogMessage {
+    send_device_event(DeviceEvent::LogMessage {
         level: communication::LogMessageLevel::Error,
         message: String::try_from(message).unwrap(),
     });

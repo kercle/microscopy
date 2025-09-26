@@ -5,9 +5,10 @@ use embassy_sync::{
     signal::Signal,
 };
 use embassy_time::{Duration, Timer};
-use esp_hal::gpio::Output;
+use esp_hal::gpio::{Input, Output};
+use heapless::String;
 
-use crate::com::{send_error, send_info, send_warning};
+use crate::com::{send_device_event, send_error, send_info, send_warning};
 
 struct StageMotorChannels {
     commands: Channel<CriticalSectionRawMutex, StageMotorCmd, 8>,
@@ -21,8 +22,20 @@ static STAGE_MOTOR: StageMotorChannels = StageMotorChannels {
 
 enum StageMotorError {
     CommandAborted,
-    SoftLowerLimitReached,
-    SoftUpperLimitReached,
+    LowerLimitReached,
+    UpperLimitReached,
+    LowerEndStopNotAvailable,
+}
+
+impl StageMotorError {
+    fn as_str(&self) -> &'static str {
+        match self {
+            StageMotorError::CommandAborted => "Command aborted",
+            StageMotorError::LowerLimitReached => "Lower limit reached",
+            StageMotorError::UpperLimitReached => "Upper limit reached",
+            StageMotorError::LowerEndStopNotAvailable => "Lower end stop not available",
+        }
+    }
 }
 
 pub struct StageMotor {
@@ -30,6 +43,8 @@ pub struct StageMotor {
     lower_limit: Option<i32>,
     upper_limit: Option<i32>,
 
+    end_stop_lower: Option<Input<'static>>,
+    en_pin: Option<Output<'static>>,
     step_pin: Output<'static>,
     dir_pin: Output<'static>,
 }
@@ -53,15 +68,52 @@ impl StageMotor {
         STAGE_MOTOR.commands.try_receive()
     }
 
+    fn is_at_lower_limit(&self) -> bool {
+        if let Some(limit) = self.lower_limit {
+            return self.position <= limit;
+        }
+
+        self.end_stop_lower_triggered()
+    }
+
+    fn is_at_upper_limit(&self) -> bool {
+        if let Some(limit) = self.upper_limit {
+            return self.position >= limit;
+        }
+        false
+    }
+
+    fn end_stop_lower_triggered(&self) -> bool {
+        if let Some(pin) = &self.end_stop_lower {
+            pin.is_high()
+        } else {
+            false
+        }
+    }
+
+    fn enable(&mut self) {
+        if let Some(en) = &mut self.en_pin {
+            en.set_low();
+        }
+    }
+
+    fn disable(&mut self) {
+        if let Some(en) = &mut self.en_pin {
+            en.set_high();
+        }
+    }
+
     fn request_stop() {
         STAGE_MOTOR.stop.signal(());
         STAGE_MOTOR.commands.clear();
     }
 
     fn stop() -> bool {
-        let stopped = STAGE_MOTOR.stop.signaled();
+        STAGE_MOTOR.stop.signaled()
+    }
+
+    fn reset_stop() {
         STAGE_MOTOR.stop.reset();
-        stopped
     }
 
     fn set_lower_limit(&mut self) {
@@ -73,8 +125,51 @@ impl StageMotor {
     }
 
     fn release_limits(&mut self) {
+        self.relase_lower_limit();
+        self.relase_upper_limit();
+    }
+
+    fn relase_lower_limit(&mut self) {
         self.lower_limit = None;
+    }
+
+    fn relase_upper_limit(&mut self) {
         self.upper_limit = None;
+    }
+
+    async fn home(&mut self) -> Result<(), StageMotorError> {
+        if self.end_stop_lower.is_none() {
+            return Err(StageMotorError::LowerEndStopNotAvailable);
+        }
+
+        self.relase_lower_limit();
+
+        loop {
+            let err = self.steps(-20, 800).await;
+
+            if let Err(StageMotorError::LowerLimitReached) = err {
+                break;
+            } else if err.is_err() {
+                return err;
+            }
+        }
+
+        self.steps(300, 1000).await?;
+
+        while !self.end_stop_lower_triggered() {
+            let err = self.steps(-1, 4000).await;
+
+            if let Err(StageMotorError::LowerLimitReached) = err {
+                break;
+            } else if err.is_err() {
+                return err;
+            }
+        }
+
+        self.position = 0;
+        self.set_lower_limit();
+
+        Ok(())
     }
 
     async fn steps(&mut self, n: i32, delay_us: u64) -> Result<(), StageMotorError> {
@@ -91,16 +186,12 @@ impl StageMotor {
                 return Err(StageMotorError::CommandAborted);
             }
 
-            if let Some(limit) = self.lower_limit {
-                if self.position <= limit && delta < 0 {
-                    return Err(StageMotorError::SoftLowerLimitReached);
-                }
+            if self.is_at_lower_limit() && delta < 0 {
+                return Err(StageMotorError::LowerLimitReached);
             }
 
-            if let Some(limit) = self.upper_limit {
-                if self.position >= limit && delta > 0 {
-                    return Err(StageMotorError::SoftUpperLimitReached);
-                }
+            if self.is_at_upper_limit() && delta > 0 {
+                return Err(StageMotorError::UpperLimitReached);
             }
 
             self.step_pin.set_high();
@@ -119,6 +210,8 @@ impl StageMotor {
 pub async fn motor_task(
     step: Output<'static>,
     dir: Output<'static>,
+    en: Option<Output<'static>>,
+    end_stop_lower: Option<Input<'static>>,
     _ms1: Output<'static>,
     _ms2: Output<'static>,
 ) {
@@ -126,30 +219,50 @@ pub async fn motor_task(
         position: 0,
         lower_limit: None,
         upper_limit: None,
+        end_stop_lower: end_stop_lower,
+        en_pin: en,
         step_pin: step,
         dir_pin: dir,
     };
 
+    state.enable();
+
     loop {
+        StageMotor::reset_stop();
+
         match StageMotor::recv_command() {
+            Ok(StageMotorCmd::Stop) => {
+                // Handled in send_command
+            }
+            Ok(StageMotorCmd::Enable) => {
+                state.enable();
+                send_info("Stage motor enabled.");
+            }
+            Ok(StageMotorCmd::Disable) => {
+                state.disable();
+                send_info("Stage motor disabled.");
+            }
+            Ok(StageMotorCmd::Home) => {
+                send_info("Homing stage.");
+                if let Err(err) = state.home().await {
+                    let mut msg = String::<256>::try_from("Homing error: ").unwrap();
+                    msg.push_str(err.as_str()).ok();
+                    send_error(&msg);
+                } else {
+                    send_info("Stage homed to lower limit.");
+                }
+            }
             Ok(StageMotorCmd::MoveSteps {
                 steps,
                 step_delay_us,
             }) => {
                 send_info("Moving stage along Z axis.");
-                match state.steps(steps, step_delay_us as u64).await {
-                    Err(StageMotorError::CommandAborted) => {
-                        send_warning("Stage movement aborted.");
-                    }
-                    Err(StageMotorError::SoftLowerLimitReached) => {
-                        send_error("Stage movement aborted: reached lower limit.");
-                    }
-                    Err(StageMotorError::SoftUpperLimitReached) => {
-                        send_error("Stage movement aborted: reached upper limit.");
-                    }
-                    Ok(()) => {
-                        send_info("Stage moved to requested position.");
-                    }
+                if let Err(err) = state.steps(steps, step_delay_us as u64).await {
+                    let mut msg = String::<256>::try_from("Stage movement error: ").unwrap();
+                    msg.push_str(err.as_str()).ok();
+                    send_error(&msg);
+                } else {
+                    send_info("Stage moved to requested position.");
                 }
             }
             Ok(StageMotorCmd::SetLowerLimit) => {
@@ -168,14 +281,12 @@ pub async fn motor_task(
                 if let Some(limit) = state.lower_limit {
                     let steps = limit - state.position;
                     send_info("Moving stage to lower limit.");
-                    match state.steps(steps, step_delay_us as u64).await {
-                        Err(StageMotorError::CommandAborted) => {
-                            send_warning("Stage movement aborted.");
-                        }
-                        Ok(()) => {
-                            send_info("Stage moved to lower limit.");
-                        }
-                        _ => {}
+                    if let Err(err) = state.steps(steps, step_delay_us as u64).await {
+                        let mut msg = String::<256>::try_from("Stage movement error: ").unwrap();
+                        msg.push_str(err.as_str()).ok();
+                        send_error(&msg);
+                    } else {
+                        send_info("Stage moved to lower limit.");
                     }
                 } else {
                     send_warning("Lower limit not set, cannot move to lower limit.");
@@ -185,22 +296,25 @@ pub async fn motor_task(
                 if let Some(limit) = state.upper_limit {
                     let steps = limit - state.position;
                     send_info("Moving stage to upper limit.");
-                    match state.steps(steps, step_delay_us as u64).await {
-                        Err(StageMotorError::CommandAborted) => {
-                            send_warning("Stage movement aborted.");
-                        }
-                        Ok(()) => {
-                            send_info("Stage moved to upper limit.");
-                        }
-                        _ => {}
+                    if let Err(err) = state.steps(steps, step_delay_us as u64).await {
+                        let mut msg = String::<256>::try_from("Stage movement error: ").unwrap();
+                        msg.push_str(err.as_str()).ok();
+                        send_error(&msg);
+                    } else {
+                        send_info("Stage moved to upper limit.");
                     }
                 } else {
                     send_warning("Upper limit not set, cannot move to upper limit.");
                 }
             }
-            _ => {}
+            Ok(StageMotorCmd::ReportPosition) => {
+                send_device_event(communication::DeviceEvent::StageMotorPosition {
+                    position_steps: state.position,
+                });
+            }
+            Err(_) => { /* No command received */ }
         }
 
-        Timer::after(Duration::from_millis(20)).await;
+        Timer::after(Duration::from_millis(10)).await;
     }
 }

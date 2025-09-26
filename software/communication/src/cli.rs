@@ -432,6 +432,7 @@ impl App {
                     ];
 
                     match event {
+                        DeviceEvent::InitSignature => {}
                         DeviceEvent::LogMessage { level, message } => {
                             let prefix = match level {
                                 communication::LogMessageLevel::Info => "[INFO]".blue(),
@@ -442,8 +443,10 @@ impl App {
                             msg.push(" ".into());
                             msg.push(message.into());
                         }
-                        _ => {
-                            msg.push("<?>".into());
+                        DeviceEvent::StageMotorPosition { position_steps } => {
+                            msg.push("Stage position:".into());
+                            msg.push(" ".into());
+                            msg.push(format!("{position_steps} steps").bold());
                         }
                     }
 

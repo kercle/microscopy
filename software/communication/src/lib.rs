@@ -57,6 +57,9 @@ impl<StrType: Serialize + DeserializeOwned> DeviceEvent<StrType> {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StageMotorCmd {
+    Enable,
+    Disable,
+    Home,
     MoveSteps { steps: i32, step_delay_us: u32 },
     Stop,
     SetLowerLimit,
@@ -64,6 +67,7 @@ pub enum StageMotorCmd {
     ReleaseLimits,
     GoToLowerLimit { step_delay_us: u32 },
     GoToUpperLimit { step_delay_us: u32 },
+    ReportPosition,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

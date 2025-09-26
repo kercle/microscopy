@@ -7,6 +7,30 @@ use regex::Regex;
 use crate::{HostCommand, StageMotorCmd};
 
 impl StageMotorCmd {
+    fn parse_enable(s: &str) -> Option<Self> {
+        if s.trim() == "enable" {
+            Some(StageMotorCmd::Enable)
+        } else {
+            None
+        }
+    }
+
+    fn parse_disable(s: &str) -> Option<Self> {
+        if s.trim() == "disable" {
+            Some(StageMotorCmd::Disable)
+        } else {
+            None
+        }
+    }
+
+    fn parse_home(s: &str) -> Option<Self> {
+        if s.trim() == "home" {
+            Some(StageMotorCmd::Home)
+        } else {
+            None
+        }
+    }
+
     fn parse_move_steps(s: &str) -> Option<Self> {
         let r = Regex::new(r"^steps:(-?\d+),(\d+)$").unwrap();
 
@@ -107,11 +131,28 @@ impl StageMotorCmd {
             None
         }
     }
+
+    fn parse_report_position(s: &str) -> Option<Self> {
+        if s.trim() == "get_pos" {
+            Some(StageMotorCmd::ReportPosition)
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for StageMotorCmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            StageMotorCmd::Enable => {
+                write!(f, "enable")
+            }
+            StageMotorCmd::Disable => {
+                write!(f, "disable")
+            }
+            StageMotorCmd::Home => {
+                write!(f, "home")
+            }
             StageMotorCmd::MoveSteps {
                 steps,
                 step_delay_us,
@@ -136,6 +177,9 @@ impl fmt::Display for StageMotorCmd {
             StageMotorCmd::GoToUpperLimit { step_delay_us } => {
                 write!(f, "goto_upper_limit:{}", step_delay_us)
             }
+            StageMotorCmd::ReportPosition => {
+                write!(f, "report_position")
+            }
         }
     }
 }
@@ -157,6 +201,14 @@ impl FromStr for StageMotorCmd {
         } else if let Some(cmd) = StageMotorCmd::parse_go_to_lower_limit(s) {
             Ok(cmd)
         } else if let Some(cmd) = StageMotorCmd::parse_go_to_upper_limit(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_enable(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_disable(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_home(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_report_position(s) {
             Ok(cmd)
         } else {
             Err("Invalid StageMotorCmd format".to_string())
