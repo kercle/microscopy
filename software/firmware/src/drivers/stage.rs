@@ -265,13 +265,21 @@ pub async fn motor_task(
                     send_info("Stage moved to requested position.");
                 }
             }
-            Ok(StageMotorCmd::SetLowerLimit) => {
+            Ok(StageMotorCmd::SetLowerLimitToCurrent) => {
                 state.set_lower_limit();
                 send_info("Set current position as lower limit.");
             }
-            Ok(StageMotorCmd::SetUpperLimit) => {
+            Ok(StageMotorCmd::SetUpperLimitToCurrent) => {
                 state.set_upper_limit();
                 send_info("Set current position as upper limit.");
+            }
+            Ok(StageMotorCmd::SetLowerLimit(limit)) => {
+                state.lower_limit = Some(limit);
+                send_info("Set lower limit.");
+            }
+            Ok(StageMotorCmd::SetUpperLimit(limit)) => {
+                state.upper_limit = Some(limit);
+                send_info("Set upper limit.");
             }
             Ok(StageMotorCmd::ReleaseLimits) => {
                 state.release_limits();

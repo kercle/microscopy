@@ -68,25 +68,65 @@ impl StageMotorCmd {
         }
     }
 
-    fn parse_set_lower_limit(s: &str) -> Option<Self> {
+    fn parse_set_lower_limit_to_current(s: &str) -> Option<Self> {
         if s.trim() == "set_lower_limit" {
-            Some(StageMotorCmd::SetLowerLimit)
+            Some(StageMotorCmd::SetLowerLimitToCurrent)
+        } else {
+            None
+        }
+    }
+
+    fn parse_set_upper_limit_to_current(s: &str) -> Option<Self> {
+        if s.trim() == "set_upper_limit" {
+            Some(StageMotorCmd::SetUpperLimitToCurrent)
+        } else {
+            None
+        }
+    }
+
+    fn parse_release_limits_to_current(s: &str) -> Option<Self> {
+        if s.trim() == "release_limits" {
+            Some(StageMotorCmd::ReleaseLimits)
         } else {
             None
         }
     }
 
     fn parse_set_upper_limit(s: &str) -> Option<Self> {
-        if s.trim() == "set_upper_limit" {
-            Some(StageMotorCmd::SetUpperLimit)
+        let r = Regex::new(r"^set_upper_limit:(-?\d+)$").unwrap();
+
+        if let Some(caps) = r.captures(s) {
+            let limit = if let Some(limit_str) = caps.get(1) {
+                limit_str.as_str().parse::<i32>().ok()
+            } else {
+                return None;
+            };
+
+            if let Some(limit) = limit {
+                Some(StageMotorCmd::SetUpperLimit(limit))
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
-    fn parse_release_limits(s: &str) -> Option<Self> {
-        if s.trim() == "release_limits" {
-            Some(StageMotorCmd::ReleaseLimits)
+    fn parse_set_lower_limit(s: &str) -> Option<Self> {
+        let r = Regex::new(r"^set_lower_limit:(-?\d+)$").unwrap();
+
+        if let Some(caps) = r.captures(s) {
+            let limit = if let Some(limit_str) = caps.get(1) {
+                limit_str.as_str().parse::<i32>().ok()
+            } else {
+                return None;
+            };
+
+            if let Some(limit) = limit {
+                Some(StageMotorCmd::SetLowerLimit(limit))
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -162,11 +202,17 @@ impl fmt::Display for StageMotorCmd {
             StageMotorCmd::Stop => {
                 write!(f, "stop")
             }
-            StageMotorCmd::SetLowerLimit => {
-                write!(f, "set_lower_limit")
+            StageMotorCmd::SetLowerLimitToCurrent => {
+                write!(f, "set_lower_limit_to_current")
             }
-            StageMotorCmd::SetUpperLimit => {
-                write!(f, "set_upper_limit")
+            StageMotorCmd::SetUpperLimitToCurrent => {
+                write!(f, "set_upper_limit_to_current")
+            }
+            StageMotorCmd::SetLowerLimit(limit) => {
+                write!(f, "set_lower_limit:{}", limit)
+            }
+            StageMotorCmd::SetUpperLimit(limit) => {
+                write!(f, "set_upper_limit:{}", limit)
             }
             StageMotorCmd::ReleaseLimits => {
                 write!(f, "release_limits")
@@ -192,11 +238,15 @@ impl FromStr for StageMotorCmd {
             Ok(cmd)
         } else if let Some(cmd) = StageMotorCmd::parse_stop(s) {
             Ok(cmd)
-        } else if let Some(cmd) = StageMotorCmd::parse_set_lower_limit(s) {
+        } else if let Some(cmd) = StageMotorCmd::parse_release_limits_to_current(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_set_lower_limit_to_current(s) {
+            Ok(cmd)
+        } else if let Some(cmd) = StageMotorCmd::parse_set_upper_limit_to_current(s) {
             Ok(cmd)
         } else if let Some(cmd) = StageMotorCmd::parse_set_upper_limit(s) {
             Ok(cmd)
-        } else if let Some(cmd) = StageMotorCmd::parse_release_limits(s) {
+        } else if let Some(cmd) = StageMotorCmd::parse_set_lower_limit(s) {
             Ok(cmd)
         } else if let Some(cmd) = StageMotorCmd::parse_go_to_lower_limit(s) {
             Ok(cmd)
