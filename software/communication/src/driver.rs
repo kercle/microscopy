@@ -27,12 +27,13 @@ impl DeviceDriver {
         })
     }
 
-    pub fn reset(&mut self) -> serialport::Result<()> {
+    pub async fn reset(&mut self) -> serialport::Result<()> {
         self.port.write_data_terminal_ready(false)?;
 
         self.port.write_request_to_send(true)?;
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         self.port.write_request_to_send(false)?;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await; // wait for device to reboot
         Ok(())
     }
 
@@ -110,7 +111,16 @@ impl DeviceDriver {
         self.decode_next_event()
     }
 
-    pub fn send_command(&mut self, cmd: HostCommand) -> Result<()> {
+    pub async fn send_command<StrType: Serialize + DeserializeOwned>(
+        &mut self,
+        cmd: HostCommand,
+    ) -> Result<()> {
+        if !self.connection_established::<StrType>() {
+            return Err(anyhow::anyhow!(
+                "Connection not established. Cannot send command."
+            ));
+        }
+
         let mut buffer: EventBuffer = [0; 4096];
         let packet_size = cmd
             .encode_bytes(&mut buffer)
@@ -119,6 +129,23 @@ impl DeviceDriver {
         self.port.write_all(&[0u8])?; // Null-terminate
         self.port.flush()?;
 
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
         Ok(())
+    }
+
+    pub async fn home<StrType: Serialize + DeserializeOwned>(&mut self) -> Result<()> {
+        self.send_command::<StrType>(HostCommand::StageMotor(crate::StageMotorCmd::Home))
+            .await
+    }
+
+    pub async fn set_upper_limit<StrType: Serialize + DeserializeOwned>(
+        &mut self,
+        position: i32,
+    ) -> Result<()> {
+        self.send_command::<StrType>(HostCommand::StageMotor(
+            crate::StageMotorCmd::SetUpperLimit(position),
+        ))
+        .await
     }
 }

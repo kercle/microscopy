@@ -160,7 +160,7 @@ impl App {
         // TODO: Make port configurable
 
         let mut driver = DeviceDriver::new(std::path::Path::new("/dev/ttyUSB0"), 115_200)?;
-        driver.reset()?;
+        driver.reset().await?;
 
         while !driver.connection_established::<String>() {
             if quit_notify.is_cancelled() {
@@ -178,7 +178,7 @@ impl App {
 
         while !quit_notify.is_cancelled() {
             while let Ok(cmd) = host_cmd_rx.try_recv() {
-                driver.send_command(cmd)?;
+                driver.send_command::<String>(cmd).await?;
             }
 
             if let Some(event) = driver.recv_event::<String>()? {

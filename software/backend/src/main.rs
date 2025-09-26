@@ -36,7 +36,13 @@ async fn device_monitor(app_state: control_app::AppState) -> Result<()> {
         return Ok(());
     };
 
-    driver.lock().await.reset()?;
+    {
+        let mut driver = driver.lock().await;
+
+        driver.reset().await?;
+        driver.home::<String>().await?;
+        driver.set_upper_limit::<String>(5450).await?; // dummy value for now
+    }
 
     while !driver.lock().await.connection_established::<String>() {
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -132,7 +138,10 @@ async fn main() {
         )
         .route("/update/firmware", post(handlers::rest::update_firmware))
         .route("/photo", get(handlers::rest::take_photo))
-        .route("/stage_z/{:command}", get(handlers::rest::stage_z_motor_command))
+        .route(
+            "/stage_z/{:command}",
+            get(handlers::rest::stage_z_motor_command),
+        )
         .with_state(app_state);
 
     let app = Router::new()

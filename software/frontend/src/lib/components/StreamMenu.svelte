@@ -2,6 +2,7 @@
 	import Download from '$lib/icons/Download.svelte';
 	import GotoLowerLimit from '$lib/icons/GotoLowerLimit.svelte';
 	import GotoUpperLimit from '$lib/icons/GotoUpperLimit.svelte';
+	import Home from '$lib/icons/Home.svelte';
 	import MoveDown from '$lib/icons/MoveDown.svelte';
 	import MoveUp from '$lib/icons/MoveUp.svelte';
 	import ReleaseLimits from '$lib/icons/ReleaseLimits.svelte';
@@ -31,7 +32,7 @@
 		</button>
 	</li>
 	<li class="flex justify-center">
-		<button on:click={() => sendCommand('/api/stage_z/up')}>
+		<button on:click={() => sendCommand('/api/stage_z/steps?steps=100&step_delay_us=1000')}>
 			<MoveUp />
 		</button>
 	</li>
@@ -41,7 +42,7 @@
 		</button>
 	</li>
 	<li class="flex justify-center">
-		<button on:click={() => sendCommand('/api/stage_z/down')}>
+		<button on:click={() => sendCommand('/api/stage_z/steps?steps=-100&step_delay_us=1000')}>
 			<MoveDown />
 		</button>
 	</li>
@@ -54,6 +55,11 @@
 	<li class="mt-6 flex justify-center">
 		<button on:click={() => sendCommand('/api/stage_z/set_upper_limit')}>
 			<SetUpperLimit />
+		</button>
+	</li>
+	<li class="flex justify-center">
+		<button on:click={() => sendCommand('/api/stage_z/home')}>
+			<Home />
 		</button>
 	</li>
 	<li class="flex justify-center">

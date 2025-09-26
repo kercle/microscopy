@@ -6,7 +6,7 @@ use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
 use std::sync::Arc;
-use tokio::sync::{broadcast, watch, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast, watch};
 use tracing::warn;
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
@@ -67,13 +67,15 @@ impl AppState {
             #[allow(unused_variables)]
             let saturation = parameters.camera_properties.saturation.unwrap_or(1.0);
 
-            format!("libcamerasrc name=source 
+            format!(
+                "libcamerasrc name=source 
                 exposure-time-mode=manual
                 exposure-time={exposure_time}
                 awb-enable=true
                 awb-mode=daylight
                 contrast={contrast}
-                saturation={saturation}")
+                saturation={saturation}"
+            )
         } else {
             "videotestsrc name=source is-live=true pattern=smpte".to_string()
         };

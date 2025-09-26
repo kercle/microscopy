@@ -1,8 +1,9 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::{body::Body, response::IntoResponse};
 use bytes::Bytes;
 use communication::{HostCommand, StageMotorCmd};
 use http::Response;
+use serde::Deserialize;
 use tracing::{error, info};
 
 use crate::control_app::AppState;
@@ -88,25 +89,57 @@ pub async fn take_photo(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-pub async fn stage_z_motor_command(State(_state): State<AppState>, Path(path): Path<String>) -> impl IntoResponse {
+#[derive(Deserialize)]
+pub struct CommandQuery {
+    steps: Option<i32>,
+    step_delay_us: Option<u32>,
+    limit: Option<i32>,
+}
+
+pub async fn stage_z_motor_command(
+    State(_state): State<AppState>,
+    Path(path): Path<String>,
+    query: Query<CommandQuery>,
+) -> impl IntoResponse {
     if let Some(driver) = &_state.device_driver {
         let mut driver = driver.lock().await;
+        let cmd_query: CommandQuery = query.0;
 
         let command = match path.as_str() {
-            "up" => StageMotorCmd::MoveSteps { steps: 100, step_delay_us: 1000 },
-            "down" => StageMotorCmd::MoveSteps { steps: -100, step_delay_us: 1000 },
+            "steps" => StageMotorCmd::MoveSteps {
+                steps: cmd_query.steps.unwrap_or(100),
+                step_delay_us: cmd_query.step_delay_us.unwrap_or(1000),
+            },
+            "home" => StageMotorCmd::Home,
+            "enable" => StageMotorCmd::Enable,
+            "disable" => StageMotorCmd::Disable,
             "stop" => StageMotorCmd::Stop,
-            "set_lower_limit" => StageMotorCmd::SetLowerLimitToCurrent,
-            "set_upper_limit" => StageMotorCmd::SetUpperLimitToCurrent,
+            "set_lower_limit" => if let Some(limit) = cmd_query.limit {
+                StageMotorCmd::SetLowerLimit(limit)
+            } else {
+                StageMotorCmd::SetLowerLimitToCurrent
+            },
+            "set_upper_limit" => if let Some(limit) = cmd_query.limit {
+                StageMotorCmd::SetUpperLimit(limit)
+            } else {
+                StageMotorCmd::SetUpperLimitToCurrent
+            },
             "release_limits" => StageMotorCmd::ReleaseLimits,
-            "goto_lower_limit" => StageMotorCmd::GoToLowerLimit { step_delay_us: 1000 },
-            "goto_upper_limit" => StageMotorCmd::GoToUpperLimit { step_delay_us: 1000 },
+            "goto_lower_limit" => StageMotorCmd::GoToLowerLimit {
+                step_delay_us: 1000,
+            },
+            "goto_upper_limit" => StageMotorCmd::GoToUpperLimit {
+                step_delay_us: 1000,
+            },
             _ => {
-                return json_response!(400, json_string!("Invalid command, use 'up', 'down', or 'stop'"));
+                return json_response!(
+                    400,
+                    json_string!("Invalid command, use 'up', 'down', or 'stop'")
+                );
             }
         };
 
-        match driver.send_command(HostCommand::StageMotor(command)) {
+        match driver.send_command::<String>(HostCommand::StageMotor(command)).await {
             Ok(_) => {
                 info!("Stage Z motor command sent");
                 json_response!(200, json_string!("ok"))
