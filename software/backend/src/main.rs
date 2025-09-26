@@ -1,6 +1,6 @@
 use anyhow::Result;
 use axum::extract::{DefaultBodyLimit, Path};
-use axum::{Router, routing::get, routing::patch, routing::post, routing::put};
+use axum::{Router, routing::get, routing::patch, routing::post};
 use bytes::Bytes;
 use communication::DeviceEvent;
 use communication::driver::DeviceDriver;
@@ -132,7 +132,7 @@ async fn main() {
         )
         .route("/update/firmware", post(handlers::rest::update_firmware))
         .route("/photo", get(handlers::rest::take_photo))
-        .route("/stage_z/{:command}", put(handlers::rest::stage_z_motor_command))
+        .route("/stage_z/{:command}", get(handlers::rest::stage_z_motor_command))
         .with_state(app_state);
 
     let app = Router::new()
