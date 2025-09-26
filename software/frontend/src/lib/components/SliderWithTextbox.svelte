@@ -1,5 +1,6 @@
 <script lang="ts">
 	export let label = 'Value';
+	export let unit = '';
 	export let value = 0;
 	export let min = 0;
 	export let max = 100;
@@ -14,7 +15,12 @@
 </script>
 
 <div class="my-1 flex flex-col">
-	<span class="label-text">{label}:</span>
+	<div class="mb-1 flex items-center gap-3">
+		<span class="label-text">{label}</span>
+		{#if unit}
+			<span class="badge badge-sm text-xs text-accent">{unit}</span>
+		{/if}
+	</div>
 	<div class="flex items-center">
 		<input
 			type="range"
@@ -23,7 +29,7 @@
 			{step}
 			bind:value
 			oninput={handleInput}
-			class="mr-4 range range-xs [--range-fill:0]"
+			class="range range-xs mr-4 [--range-fill:0]"
 		/>
 		<input
 			type="number"

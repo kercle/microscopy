@@ -4,28 +4,30 @@
 	import CameraControls from '$lib/components/CameraControls.svelte';
 	import Drawer from '$lib/icons/Drawer.svelte';
 	import LogsJournal from '$lib/components/LogsJournal.svelte';
-	import type { LogMessage } from '$lib';
 	import Live from '$lib/icons/Live.svelte';
 	import Journal from '$lib/icons/Journal.svelte';
-	import Download from '$lib/icons/Download.svelte';
 	import StreamMenu from '$lib/components/StreamMenu.svelte';
+	import ZStageControls from '$lib/components/ZStageControls.svelte';
+	import type { State } from '$lib/state';
 
-	let ws: WebSocket | null = $state(null);
+	let appState: State = $state({
+		ws: null,
+		zStage: { program_1: { speed: 500, distance: 50 }, program_2: { speed: 1250, distance: 1000 } }
+	});
 
 	let camera_controls_ref: CameraControls;
 	let logs_journal_ref: LogsJournal;
 
 	$effect(() => {
-		ws = connect((event: MessageEvent) => {
+		appState.ws = connect((event: MessageEvent) => {
 			let data = JSON.parse(event.data);
 
 			camera_controls_ref.update(data);
 			if (data.logs) {
-				console.log('Received logs', data.logs);
 				logs_journal_ref.addLogMessages(data.logs);
 			}
 		});
-		return () => ws?.close();
+		return () => appState.ws?.close();
 	});
 </script>
 
@@ -46,7 +48,7 @@
 					class="w-full rounded-md"
 					draggable="false"
 				/>
-				<StreamMenu />
+				<StreamMenu bind:appState />
 			</div>
 
 			<!-- Tab 2: Journal -->
@@ -69,8 +71,9 @@
 	<div class="drawer-side border-l-base-300 border-l">
 		<label for="my-drawer-2" aria-label="close sidebar" class="drawer-overlay"></label>
 		<ul class="menu bg-base-200 text-base-content w-100 min-h-full p-4">
-			<div class="card bg-base-100 shadow-sm">
-				<CameraControls {ws} bind:this={camera_controls_ref} />
+			<div class="flex flex-col gap-2">
+				<CameraControls bind:appState bind:this={camera_controls_ref} />
+				<ZStageControls bind:appState />
 			</div>
 		</ul>
 	</div>
