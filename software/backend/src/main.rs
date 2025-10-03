@@ -39,8 +39,7 @@ async fn device_monitor(app_state: control_app::AppState) -> Result<()> {
     {
         let mut driver = driver.lock().await;
 
-        driver.reset().await?;
-        driver.home::<String>().await?;
+        driver.reset().await?; // This also runs the homing procedure
         driver.set_upper_limit::<String>(5450).await?; // dummy value for now
     }
 
