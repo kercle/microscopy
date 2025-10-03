@@ -240,9 +240,6 @@ pub async fn motor_task(
         StageMotor::reset_stop();
 
         match StageMotor::recv_command() {
-            Ok(StageMotorCmd::Stop) => {
-                // Handled in send_command
-            }
             Ok(StageMotorCmd::Enable) => {
                 state.enable();
                 send_info("Stage motor enabled.");
@@ -321,6 +318,7 @@ pub async fn motor_task(
                     position_steps: state.position,
                 });
             }
+            Ok(StageMotorCmd::Stop) => { /* Handled in send_command */ }
             Err(_) => { /* No command received */ }
         }
 
