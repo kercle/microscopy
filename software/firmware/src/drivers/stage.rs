@@ -6,7 +6,7 @@ use embassy_sync::{
 };
 use embassy_time::{Duration, Timer};
 use esp_hal::gpio::{Input, Output};
-use heapless::String;
+use heapless::format;
 
 use crate::com::{send_device_event, send_error, send_info, send_warning};
 
@@ -35,6 +35,12 @@ impl StageMotorError {
             StageMotorError::UpperLimitReached => "Upper limit reached",
             StageMotorError::LowerEndStopNotAvailable => "Lower end stop not available",
         }
+    }
+}
+
+impl core::fmt::Display for StageMotorError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -226,6 +232,9 @@ pub async fn motor_task(
     };
 
     state.enable();
+    if let Err(err) = state.home().await {
+        send_error(&format!(256; "Homing error: {}", err).unwrap());
+    }
 
     loop {
         StageMotor::reset_stop();
@@ -245,9 +254,7 @@ pub async fn motor_task(
             Ok(StageMotorCmd::Home) => {
                 send_info("Homing stage.");
                 if let Err(err) = state.home().await {
-                    let mut msg = String::<256>::try_from("Homing error: ").unwrap();
-                    msg.push_str(err.as_str()).ok();
-                    send_error(&msg);
+                    send_error(&format!(256; "Homing error: {}", err).unwrap());
                 } else {
                     send_info("Stage homed to lower limit.");
                 }
@@ -258,9 +265,7 @@ pub async fn motor_task(
             }) => {
                 send_info("Moving stage along Z axis.");
                 if let Err(err) = state.steps(steps, step_delay_us as u64).await {
-                    let mut msg = String::<256>::try_from("Stage movement error: ").unwrap();
-                    msg.push_str(err.as_str()).ok();
-                    send_error(&msg);
+                    send_error(&format!(256; "Stage movement error: {}", err).unwrap());
                 } else {
                     send_info("Stage moved to requested position.");
                 }
@@ -290,9 +295,7 @@ pub async fn motor_task(
                     let steps = limit - state.position;
                     send_info("Moving stage to lower limit.");
                     if let Err(err) = state.steps(steps, step_delay_us as u64).await {
-                        let mut msg = String::<256>::try_from("Stage movement error: ").unwrap();
-                        msg.push_str(err.as_str()).ok();
-                        send_error(&msg);
+                        send_error(&format!(256; "Stage movement error: {}", err).unwrap());
                     } else {
                         send_info("Stage moved to lower limit.");
                     }
@@ -305,9 +308,7 @@ pub async fn motor_task(
                     let steps = limit - state.position;
                     send_info("Moving stage to upper limit.");
                     if let Err(err) = state.steps(steps, step_delay_us as u64).await {
-                        let mut msg = String::<256>::try_from("Stage movement error: ").unwrap();
-                        msg.push_str(err.as_str()).ok();
-                        send_error(&msg);
+                        send_error(&format!(256; "Stage movement error: {}", err).unwrap());
                     } else {
                         send_info("Stage moved to upper limit.");
                     }
