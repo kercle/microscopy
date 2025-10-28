@@ -6,7 +6,7 @@ use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock, broadcast, watch};
+use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
 use tracing::warn;
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
@@ -21,10 +21,17 @@ pub struct LogEntry {
     pub message: String,
 }
 
+pub struct AppStateGuard<'a> {
+    state: &'a AppState,
+    _permit: OwnedSemaphorePermit,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
     logs_tx: broadcast::Sender<LogEntry>,
+
+    sem: Arc<Semaphore>,
 
     pipeline: gst::Pipeline,
     logs: Arc<RwLock<Vec<LogEntry>>>,
@@ -111,6 +118,7 @@ impl AppState {
         let app_state = AppState {
             frame_rx,
             logs_tx,
+            sem: Arc::new(Semaphore::new(1)),
             logs,
             pipeline: AppState::create_pipeline()?,
             parameters_controller: Arc::new(RwLock::new(parameters)),
@@ -121,6 +129,14 @@ impl AppState {
         app_state.play_pipeline()?;
 
         Ok(app_state)
+    }
+
+    pub async fn with_guard(&self) -> Result<AppStateGuard<'_>> {
+        let permit = self.sem.clone().acquire_owned().await?;
+        Ok(AppStateGuard {
+            state: self,
+            _permit: permit,
+        })
     }
 
     pub async fn update_from_bytes(&self, bytes: Bytes) -> Result<()> {
@@ -167,12 +183,12 @@ impl AppState {
         }
     }
 
-    pub fn stop_pipeline(&self) -> Result<()> {
+    fn stop_pipeline(&self) -> Result<()> {
         self.pipeline.set_state(gst::State::Null)?;
         Ok(())
     }
 
-    pub fn play_pipeline(&self) -> Result<()> {
+    fn play_pipeline(&self) -> Result<()> {
         self.pipeline.set_state(gst::State::Playing)?;
         Ok(())
     }
@@ -186,7 +202,7 @@ impl AppState {
         self.logs_tx.subscribe()
     }
 
-    pub async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
+    async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
         self.stop_pipeline()?;
 
         let pipeline_string =
@@ -223,6 +239,20 @@ impl AppState {
         self.play_pipeline()?;
 
         Ok(data)
+    }
+}
+
+impl<'a> AppStateGuard<'a> {
+    pub fn stop_pipeline(&self) -> Result<()> {
+        self.state.stop_pipeline()
+    }
+
+    pub fn play_pipeline(&self) -> Result<()> {
+        self.state.play_pipeline()
+    }
+
+    pub async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
+        self.state.take_photo(parameters).await
     }
 }
 

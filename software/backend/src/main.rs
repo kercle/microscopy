@@ -113,11 +113,15 @@ async fn main() {
                         break;
                     }
 
-                    let params = state_notify.borrow_and_update();
+                    let params = {
+                        let p = state_notify.borrow_and_update();
+                        p.clone()
+                    };
 
-                    app_state.stop_pipeline().unwrap();
+                    let app_state_guard = app_state.with_guard().await.unwrap();
+                    app_state_guard.stop_pipeline().unwrap();
                     params.camera_properties.write_to_source(&app_state.get_source());
-                    app_state.play_pipeline().unwrap();
+                    app_state_guard.play_pipeline().unwrap();
                 }
             }
         }

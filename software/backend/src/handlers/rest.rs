@@ -66,7 +66,18 @@ pub async fn take_photo(State(state): State<AppState>) -> impl IntoResponse {
         p.parameters.clone()
     };
 
-    match state.take_photo(&parameters).await {
+    let app_state_guard = match state.with_guard().await {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("Failed to acquire app state guard: {err}");
+            return json_response!(
+                500,
+                json_string!(&format!("Failed to acquire app state guard: {err}"))
+            );
+        }
+    };
+
+    match app_state_guard.take_photo(&parameters).await {
         Ok(photo) => {
             let filename = format!(
                 "microscope-{}.jpg",
