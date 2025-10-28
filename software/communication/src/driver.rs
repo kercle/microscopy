@@ -148,4 +148,18 @@ impl DeviceDriver {
         ))
         .await
     }
+
+    pub async fn stage_move_steps<StrType: Serialize + DeserializeOwned>(
+        &mut self,
+        steps: i32,
+        step_delay_us: u32,
+    ) -> Result<()> {
+        self.send_command::<StrType>(HostCommand::StageMotor(
+            crate::StageMotorCmd::MoveSteps {
+                steps,
+                step_delay_us,
+            },
+        ))
+        .await
+    }
 }
