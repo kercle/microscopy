@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow};
 use axum::extract::{Path, Query, State};
 use axum::{body::Body, response::IntoResponse};
 use bytes::Bytes;
@@ -104,60 +105,42 @@ pub async fn z_scan(
     State(state): State<AppState>,
     Path((delta_min, delta_max, steps_between_layers)): Path<(i32, i32, u32)>,
 ) -> impl IntoResponse {
-    info!("Received z-scan request");
+    async fn exec(
+        state: &AppState,
+        delta_min: i32,
+        delta_max: i32,
+        steps_between_layers: u32,
+    ) -> Result<()> {
+        info!("Received z-scan request");
 
-    let parameters = {
-        let p = state.parameters_controller.read().await;
-        p.parameters.clone()
-    };
+        let parameters = {
+            let p = state.parameters_controller.read().await;
+            p.parameters.clone()
+        };
 
-    let app_state_guard = match state.with_guard().await {
-        Ok(guard) => guard,
-        Err(err) => {
-            error!("Failed to acquire app state guard: {err}");
-            return json_response!(
-                500,
-                json_string!(&format!("Failed to acquire app state guard: {err}"))
-            );
+        let app_state_guard = state.with_guard().await?;
+        let frames = app_state_guard
+            .z_scan(&parameters, delta_min, delta_max, steps_between_layers)
+            .await?;
+
+        // Temporary solution: write frames to a directory
+        // In the future, we need a more robust way to store the images
+        // and also allow accessing them via the API/Web UI
+
+        tokio::fs::create_dir_all("/tmp/microscope_zscans").await?;
+
+        for (idx, frame) in frames.iter().enumerate() {
+            let filename = format!("/tmp/microscope_zscans/microscope-zscan-{:0>4}.jpg", idx);
+
+            tokio::fs::write(&filename, frame).await?;
+            info!("Wrote z-scan frame to file {}", filename);
         }
-    };
 
-    match app_state_guard
-        .z_scan(&parameters, delta_min, delta_max, steps_between_layers)
-        .await
-    {
-        Ok(data) => {
-            // Temporary solution: write frames to a directory
-            // In the future, we need a more robust way to store the images
-            // and also allow accessing them via the API/Web UI
+        Ok(())
+    }
 
-            if let Err(err) = std::fs::create_dir_all("/tmp/microscope_zscans") {
-                error!("Failed to create z-scan directory: {}", err);
-                return json_response!(
-                    500,
-                    json_string!(&format!("Failed to create z-scan directory: {}", err))
-                );
-            }
-
-            for (idx, frame) in data.iter().enumerate() {
-                let filename = format!("/tmp/microscope_zscans/microscope-zscan-{:0>4}.jpg", idx);
-
-                if let Err(err) = std::fs::write(&filename, frame) {
-                    error!("Failed to write z-scan frame to file {}: {}", filename, err);
-                    return json_response!(
-                        500,
-                        json_string!(&format!(
-                            "Failed to write z-scan frame to file {}: {}",
-                            filename, err
-                        ))
-                    );
-                }
-
-                info!("Wrote z-scan frame to file {}", filename);
-            }
-
-            json_response!(200, json_string!("ok"))
-        }
+    match exec(&state, delta_min, delta_max, steps_between_layers).await {
+        Ok(_) => json_response!(200, json_string!("ok")),
         Err(err) => json_response!(
             500,
             json_string!(&format!("Failed to perform z-scan: {err}"))
