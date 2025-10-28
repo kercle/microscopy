@@ -259,7 +259,7 @@ impl AppState {
         delta_high: i32,
         delta_low: i32,
         delta_steps: u32,
-    ) -> Result<()> {
+    ) -> Result<Vec<Bytes>> {
         if delta_high <= delta_low || delta_steps == 0 {
             return Err(anyhow!("Invalid Z-scan parameters"));
         }
@@ -279,9 +279,11 @@ impl AppState {
                 .await?;
 
             let mut current_pos = delta_high;
+            let mut frames = Vec::new();
             loop {
                 info!("Taking photo at Z position: {}", current_pos);
-                let _photo_data = Self::pull_nth_sample_data(&appsink, 5)?;
+                let photo_data = Self::pull_nth_sample_data(&appsink, 5)?;
+                frames.push(photo_data);
 
                 device_driver
                     .stage_move_steps::<String>(-(delta_steps as i32), 2000)
@@ -301,7 +303,7 @@ impl AppState {
             photo_pipeline.set_state(gst::State::Null)?;
             self.play_pipeline()?;
 
-            Ok(())
+            Ok(frames)
         } else {
             Err(anyhow!("Device driver not available for Z-scan"))
         }
@@ -327,7 +329,7 @@ impl<'a> AppStateGuard<'a> {
         delta_low: i32,
         delta_high: i32,
         delta_steps: u32,
-    ) -> Result<()> {
+    ) -> Result<Vec<Bytes>> {
         self.state
             .z_scan(parameters, delta_high, delta_low, delta_steps)
             .await

@@ -126,7 +126,38 @@ pub async fn z_scan(
         .z_scan(&parameters, delta_min, delta_max, steps_between_layers)
         .await
     {
-        Ok(_) => json_response!(200, json_string!("ok")),
+        Ok(data) => {
+            // Temporary solution: write frames to a directory
+            // In the future, we need a more robust way to store the images
+            // and also allow accessing them via the API/Web UI
+
+            if let Err(err) = std::fs::create_dir_all("/tmp/microscope_zscans") {
+                error!("Failed to create z-scan directory: {}", err);
+                return json_response!(
+                    500,
+                    json_string!(&format!("Failed to create z-scan directory: {}", err))
+                );
+            }
+
+            for (idx, frame) in data.iter().enumerate() {
+                let filename = format!("/tmp/microscope_zscans/microscope-zscan-{:0>4}.jpg", idx);
+
+                if let Err(err) = std::fs::write(&filename, frame) {
+                    error!("Failed to write z-scan frame to file {}: {}", filename, err);
+                    return json_response!(
+                        500,
+                        json_string!(&format!(
+                            "Failed to write z-scan frame to file {}: {}",
+                            filename, err
+                        ))
+                    );
+                }
+
+                info!("Wrote z-scan frame to file {}", filename);
+            }
+
+            json_response!(200, json_string!("ok"))
+        }
         Err(err) => json_response!(
             500,
             json_string!(&format!("Failed to perform z-scan: {err}"))
