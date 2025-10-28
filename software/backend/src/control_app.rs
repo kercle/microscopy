@@ -202,7 +202,7 @@ impl AppState {
         self.logs_tx.subscribe()
     }
 
-    async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
+    async fn start_photo_pipeline(&self, parameters: &Parameters) -> Result<gst::Pipeline> {
         self.stop_pipeline()?;
 
         let pipeline_string =
@@ -212,7 +212,11 @@ impl AppState {
             .map_err(|e| anyhow!("Launching photo pipeline failed: {}", e.type_().name()))?;
 
         photo_pipeline.set_state(gst::State::Playing)?;
+        Ok(photo_pipeline)
+    }
 
+    async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
+        let photo_pipeline = self.start_photo_pipeline(parameters).await?;
         let appsink = photo_pipeline
             .by_name("sink")
             .unwrap()
