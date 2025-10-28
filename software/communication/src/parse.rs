@@ -102,11 +102,7 @@ impl StageMotorCmd {
                 return None;
             };
 
-            if let Some(limit) = limit {
-                Some(StageMotorCmd::SetUpperLimit(limit))
-            } else {
-                None
-            }
+            limit.map(StageMotorCmd::SetUpperLimit)
         } else {
             None
         }
@@ -122,11 +118,7 @@ impl StageMotorCmd {
                 return None;
             };
 
-            if let Some(limit) = limit {
-                Some(StageMotorCmd::SetLowerLimit(limit))
-            } else {
-                None
-            }
+            limit.map(StageMotorCmd::SetLowerLimit)
         } else {
             None
         }
@@ -142,11 +134,7 @@ impl StageMotorCmd {
                 return None;
             };
 
-            if let Some(step_delay_us) = step_delay_us {
-                Some(StageMotorCmd::GoToLowerLimit { step_delay_us })
-            } else {
-                None
-            }
+            step_delay_us.map(|step_delay_us| StageMotorCmd::GoToLowerLimit { step_delay_us })
         } else {
             None
         }
@@ -162,11 +150,7 @@ impl StageMotorCmd {
                 return None;
             };
 
-            if let Some(step_delay_us) = step_delay_us {
-                Some(StageMotorCmd::GoToUpperLimit { step_delay_us })
-            } else {
-                None
-            }
+            step_delay_us.map(|step_delay_us| StageMotorCmd::GoToUpperLimit { step_delay_us })
         } else {
             None
         }

@@ -51,7 +51,7 @@ impl ParametersController {
     }
 
     pub fn patch(&mut self, other: &Parameters) {
-        let changes = self.parameters.patch(&other);
+        let changes = self.parameters.patch(other);
 
         if changes > 0 {
             let _ = self.notify_channel.send(self.parameters.clone());

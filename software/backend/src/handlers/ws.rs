@@ -44,7 +44,7 @@ async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
     }
 }
 
-async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
+async fn handle_socket(mut socket: WebSocket, app: AppState) -> Result<()> {
     let mut rx = {
         let p = app.parameters_controller.read().await;
         p.subscribe_changes()
@@ -74,7 +74,7 @@ async fn handle_socket(mut socket: WebSocket, mut app: AppState) -> Result<()> {
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(msg)) => {
-                        process_message(msg, &mut app).await;
+                        process_message(msg, &app).await;
                     }
                     Some(Err(err)) => {
                         eprintln!("WebSocket error: {}", err);

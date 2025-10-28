@@ -84,9 +84,9 @@ impl From<i32> for TestPattern {
     }
 }
 
-impl Into<GValue> for TestPattern {
-    fn into(self) -> GValue {
-        GValue::from(self as i32)
+impl From<TestPattern> for GValue {
+    fn from(val: TestPattern) -> Self {
+        GValue::from(val as i32)
     }
 }
 
@@ -233,7 +233,7 @@ pub async fn produce_frames(tx: watch::Sender<Arc<Bytes>>, sink: gst_app::AppSin
             .buffer()
             .ok_or_else(|| anyhow::anyhow!("no buffer"))?;
 
-        let frame = VideoFrameRef::from_buffer_ref_readable(buf, &info)?;
+        let frame = VideoFrameRef::from_buffer_ref_readable(buf, info)?;
 
         let strides = info.stride();
         let (sy, su, sv) = (

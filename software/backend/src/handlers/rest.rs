@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use axum::extract::{Path, Query, State};
 use axum::{body::Body, response::IntoResponse};
 use bytes::Bytes;
