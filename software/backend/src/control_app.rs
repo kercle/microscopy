@@ -215,17 +215,14 @@ impl AppState {
         Ok(photo_pipeline)
     }
 
-    async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
-        let photo_pipeline = self.start_photo_pipeline(parameters).await?;
-        let appsink = photo_pipeline
-            .by_name("sink")
-            .unwrap()
-            .downcast::<gst_app::AppSink>()
-            .unwrap();
+    fn pull_nth_sample_data(appsink: &gst_app::AppSink, n: u32) -> Result<Bytes> {
+        if n == 0 {
+            return Err(anyhow!("n must be greater than 0"));
+        }
 
         let mut sample = appsink.pull_sample()?;
 
-        for _ in 0..5 {
+        for _ in 0..n - 1 {
             sample = appsink.pull_sample()?;
         }
 
@@ -237,7 +234,18 @@ impl AppState {
             .map_readable()
             .map_err(|_| anyhow!("Failed to map buffer readable"))?;
 
-        let data = Bytes::copy_from_slice(map.as_slice());
+        Ok(Bytes::copy_from_slice(map.as_slice()))
+    }
+
+    async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
+        let photo_pipeline = self.start_photo_pipeline(parameters).await?;
+        let appsink = photo_pipeline
+            .by_name("sink")
+            .unwrap()
+            .downcast::<gst_app::AppSink>()
+            .unwrap();
+
+        let data = Self::pull_nth_sample_data(&appsink, 5)?;
 
         photo_pipeline.set_state(gst::State::Null)?;
         self.play_pipeline()?;
