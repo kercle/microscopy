@@ -100,6 +100,40 @@ pub async fn take_photo(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+pub async fn z_scan(
+    State(state): State<AppState>,
+    Path((delta_min, delta_max, steps_between_layers)): Path<(i32, i32, u32)>,
+) -> impl IntoResponse {
+    info!("Received z-scan request");
+
+    let parameters = {
+        let p = state.parameters_controller.read().await;
+        p.parameters.clone()
+    };
+
+    let app_state_guard = match state.with_guard().await {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("Failed to acquire app state guard: {err}");
+            return json_response!(
+                500,
+                json_string!(&format!("Failed to acquire app state guard: {err}"))
+            );
+        }
+    };
+
+    match app_state_guard
+        .z_scan(&parameters, delta_min, delta_max, steps_between_layers)
+        .await
+    {
+        Ok(_) => json_response!(200, json_string!("ok")),
+        Err(err) => json_response!(
+            500,
+            json_string!(&format!("Failed to perform z-scan: {err}"))
+        ),
+    }
+}
+
 #[derive(Deserialize)]
 pub struct CommandQuery {
     steps: Option<i32>,
@@ -125,16 +159,20 @@ pub async fn stage_z_motor_command(
             "enable" => StageMotorCmd::Enable,
             "disable" => StageMotorCmd::Disable,
             "stop" => StageMotorCmd::Stop,
-            "set_lower_limit" => if let Some(limit) = cmd_query.limit {
-                StageMotorCmd::SetLowerLimit(limit)
-            } else {
-                StageMotorCmd::SetLowerLimitToCurrent
-            },
-            "set_upper_limit" => if let Some(limit) = cmd_query.limit {
-                StageMotorCmd::SetUpperLimit(limit)
-            } else {
-                StageMotorCmd::SetUpperLimitToCurrent
-            },
+            "set_lower_limit" => {
+                if let Some(limit) = cmd_query.limit {
+                    StageMotorCmd::SetLowerLimit(limit)
+                } else {
+                    StageMotorCmd::SetLowerLimitToCurrent
+                }
+            }
+            "set_upper_limit" => {
+                if let Some(limit) = cmd_query.limit {
+                    StageMotorCmd::SetUpperLimit(limit)
+                } else {
+                    StageMotorCmd::SetUpperLimitToCurrent
+                }
+            }
             "release_limits" => StageMotorCmd::ReleaseLimits,
             "goto_lower_limit" => StageMotorCmd::GoToLowerLimit {
                 step_delay_us: 1000,
@@ -150,7 +188,10 @@ pub async fn stage_z_motor_command(
             }
         };
 
-        match driver.send_command::<String>(HostCommand::StageMotor(command)).await {
+        match driver
+            .send_command::<String>(HostCommand::StageMotor(command))
+            .await
+        {
             Ok(_) => {
                 info!("Stage Z motor command sent");
                 json_response!(200, json_string!("ok"))

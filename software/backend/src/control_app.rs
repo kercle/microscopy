@@ -7,7 +7,7 @@ use gstreamer_app as gst_app;
 use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
 use crate::parameters::{Parameters, ParametersController};
@@ -252,6 +252,60 @@ impl AppState {
 
         Ok(data)
     }
+
+    async fn z_scan(
+        &self,
+        parameters: &Parameters,
+        delta_high: i32,
+        delta_low: i32,
+        delta_steps: u32,
+    ) -> Result<()> {
+        if delta_high <= delta_low || delta_steps == 0 {
+            return Err(anyhow!("Invalid Z-scan parameters"));
+        }
+
+        if let Some(device_driver) = &self.device_driver {
+            let photo_pipeline = self.start_photo_pipeline(parameters).await?;
+            let appsink = photo_pipeline
+                .by_name("sink")
+                .unwrap()
+                .downcast::<gst_app::AppSink>()
+                .unwrap();
+
+            let mut device_driver = device_driver.lock().await;
+
+            device_driver
+                .stage_move_steps::<String>(delta_high, 1000)
+                .await?;
+
+            let mut current_pos = delta_high;
+            loop {
+                info!("Taking photo at Z position: {}", current_pos);
+                let _photo_data = Self::pull_nth_sample_data(&appsink, 5)?;
+
+                device_driver
+                    .stage_move_steps::<String>(-(delta_steps as i32), 2000)
+                    .await?;
+
+                current_pos -= delta_steps as i32;
+                if current_pos < delta_low {
+                    break;
+                }
+            }
+
+            // Return to initial position
+            device_driver
+                .stage_move_steps::<String>(-current_pos, 1000)
+                .await?;
+
+            photo_pipeline.set_state(gst::State::Null)?;
+            self.play_pipeline()?;
+
+            Ok(())
+        } else {
+            Err(anyhow!("Device driver not available for Z-scan"))
+        }
+    }
 }
 
 impl<'a> AppStateGuard<'a> {
@@ -265,6 +319,18 @@ impl<'a> AppStateGuard<'a> {
 
     pub async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
         self.state.take_photo(parameters).await
+    }
+
+    pub async fn z_scan(
+        &self,
+        parameters: &Parameters,
+        delta_low: i32,
+        delta_high: i32,
+        delta_steps: u32,
+    ) -> Result<()> {
+        self.state
+            .z_scan(parameters, delta_high, delta_low, delta_steps)
+            .await
     }
 }
 

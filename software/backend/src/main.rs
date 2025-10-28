@@ -142,6 +142,10 @@ async fn main() {
         .route("/update/firmware", post(handlers::rest::update_firmware))
         .route("/photo", get(handlers::rest::take_photo))
         .route(
+            "/z_scan/{:delta_min}/{:delta_max}/{:steps_between_layers}",
+            get(handlers::rest::z_scan),
+        )
+        .route(
             "/stage_z/{:command}",
             get(handlers::rest::stage_z_motor_command),
         )
