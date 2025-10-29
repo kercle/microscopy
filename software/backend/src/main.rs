@@ -174,6 +174,15 @@ async fn serve(options: ServeOptions) {
             }),
         )
         .route(
+            "/list_z_scans",
+            get({
+                let z_scan_dir = options.get_z_scan_dir().await;
+                move |State(state): State<AppState>| async move {
+                    handlers::rest::list_z_scans(State(state), z_scan_dir).await
+                }
+            }),
+        )
+        .route(
             "/stage_z/{:command}",
             get(handlers::rest::stage_z_motor_command),
         )

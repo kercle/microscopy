@@ -142,7 +142,12 @@ pub async fn z_scan(
 
         let app_state_guard = state.with_guard().await?;
         let frames = app_state_guard
-            .z_scan(&parameters, relative_start_pos, relative_stop_pos, steps_between_layers)
+            .z_scan(
+                &parameters,
+                relative_start_pos,
+                relative_stop_pos,
+                steps_between_layers,
+            )
             .await?;
 
         let z_scan_dir = z_scan_dir.join(&z_scan_uuid);
@@ -188,6 +193,61 @@ pub async fn z_scan(
             500,
             json_string!(&format!("Failed to perform z-scan: {err}"))
         ),
+    }
+}
+
+pub async fn list_z_scans(
+    State(_state): State<AppState>,
+    z_scan_dir: PathBuf,
+) -> impl IntoResponse {
+    async fn exec(z_scan_dir: PathBuf) -> Result<Vec<ZScanMetadata>> {
+        let mut scans = Vec::new();
+
+        let mut dir_entries = tokio::fs::read_dir(&z_scan_dir).await?;
+
+        while let Some(entry) = dir_entries.next_entry().await? {
+            let path = entry.path();
+
+            if !path.is_dir() {
+                continue;
+            }
+
+            let metadata_path = path.join("metadata.json");
+
+            if !metadata_path.exists() {
+                warn!(
+                    "Z-scan metadata file does not exist: {}",
+                    metadata_path.display()
+                );
+                continue;
+            }
+
+            let metadata_content = tokio::fs::read_to_string(&metadata_path).await?;
+            let metadata: ZScanMetadata = serde_json::from_str(&metadata_content)?;
+
+            if metadata.uuid != path.file_name().unwrap().to_string_lossy() {
+                warn!(
+                    "Z-scan directory name does not match UUID in metadata: {} vs {}, skipping",
+                    path.file_name().unwrap().to_string_lossy(),
+                    metadata.uuid
+                );
+                continue;
+            }
+            scans.push(metadata);
+        }
+
+        Ok(scans)
+    }
+
+    match exec(z_scan_dir).await {
+        Ok(scans) => match serde_json::to_string(&scans) {
+            Ok(body) => json_response!(200, body),
+            Err(err) => json_response!(
+                500,
+                json_string!(&format!("Failed to serialize z-scan list: {err}"))
+            ),
+        },
+        Err(err) => json_response!(500, json_string!(&format!("Failed to list z-scans: {err}"))),
     }
 }
 
