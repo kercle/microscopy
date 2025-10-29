@@ -5,9 +5,9 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
-use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
@@ -278,8 +278,8 @@ impl<'a> AppStateGuard<'a> {
     async fn z_scan_internal(
         &self,
         photo_pipeline: &gst::Pipeline,
-        delta_low: i32,
-        delta_high: i32,
+        relative_start_pos: i32,
+        relative_stop_pos: i32,
         delta_steps: u32,
     ) -> Result<Vec<Bytes>> {
         let device_driver = self.state.device_driver.as_ref().unwrap();
@@ -293,10 +293,16 @@ impl<'a> AppStateGuard<'a> {
         let mut device_driver = device_driver.lock().await;
 
         device_driver
-            .stage_move_steps::<String>(delta_high, 1000)
+            .stage_move_steps::<String>(relative_start_pos, 1000)
             .await?;
 
-        let mut current_pos = delta_high;
+        let mut current_pos = relative_start_pos;
+        let delta = if relative_start_pos < relative_stop_pos {
+            delta_steps as i32
+        } else {
+            -(delta_steps as i32)
+        };
+
         let mut frames = Vec::new();
         loop {
             info!("Taking photo at Z position: {}", current_pos);
@@ -304,11 +310,13 @@ impl<'a> AppStateGuard<'a> {
             frames.push(photo_data);
 
             device_driver
-                .stage_move_steps::<String>(-(delta_steps as i32), 2000)
+                .stage_move_steps::<String>(delta, 2000)
                 .await?;
 
-            current_pos -= delta_steps as i32;
-            if current_pos < delta_low {
+            current_pos += delta;
+            if (delta > 0 && current_pos > relative_stop_pos)
+                || (delta < 0 && current_pos < relative_stop_pos)
+            {
                 break;
             }
         }
@@ -324,12 +332,12 @@ impl<'a> AppStateGuard<'a> {
     pub async fn z_scan(
         &self,
         parameters: &Parameters,
-        delta_low: i32,
-        delta_high: i32,
+        relative_start_pos: i32,
+        relative_stop_pos: i32,
         delta_steps: u32,
     ) -> Result<Vec<Bytes>> {
-        if delta_high <= delta_low || delta_steps == 0 {
-            return Err(anyhow!("Invalid Z-scan parameters"));
+        if delta_steps == 0 {
+            return Err(anyhow!("delta_steps must be greater than 0"));
         }
 
         if self.state.device_driver.is_none() {
@@ -339,7 +347,12 @@ impl<'a> AppStateGuard<'a> {
         let photo_pipeline = self.state.start_photo_pipeline(parameters).await?;
 
         let ret = self
-            .z_scan_internal(&photo_pipeline, delta_low, delta_high, delta_steps)
+            .z_scan_internal(
+                &photo_pipeline,
+                relative_start_pos,
+                relative_stop_pos,
+                delta_steps,
+            )
             .await;
 
         photo_pipeline.set_state(gst::State::Null)?;

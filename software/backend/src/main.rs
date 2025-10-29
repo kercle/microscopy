@@ -1,7 +1,8 @@
 use anyhow::Result;
-use axum::extract::{DefaultBodyLimit, Path};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::{Router, routing::get, routing::patch, routing::post};
 use bytes::Bytes;
+use clap::Parser;
 use communication::DeviceEvent;
 use communication::driver::DeviceDriver;
 use std::path::PathBuf;
@@ -13,10 +14,32 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 use parameters::ParametersController;
 
+use crate::control_app::AppState;
+
 mod camera;
 mod control_app;
 mod handlers;
 mod parameters;
+
+#[derive(Parser)]
+struct ServeOptions {
+    #[clap(long, default_value = "/tmp/microscope_zscans")]
+    z_scan_dir: PathBuf,
+}
+
+impl ServeOptions {
+    async fn get_z_scan_dir(&self) -> PathBuf {
+        tokio::fs::create_dir_all(&self.z_scan_dir)
+            .await
+            .expect("Failed to create z-scan directory");
+        self.z_scan_dir.clone()
+    }
+}
+
+#[derive(Parser)]
+enum CliCommand {
+    Serve(ServeOptions),
+}
 
 fn init_tracing(app_state: &control_app::AppState) {
     tracing_subscriber::registry()
@@ -71,8 +94,7 @@ async fn device_monitor(app_state: control_app::AppState) -> Result<()> {
     }
 }
 
-#[tokio::main]
-async fn main() {
+async fn serve(options: ServeOptions) {
     let parameters_controller = ParametersController::new();
     let mut state_notify = parameters_controller.subscribe_changes();
 
@@ -143,8 +165,13 @@ async fn main() {
         .route("/cancel_operation", get(handlers::rest::cancel_operation))
         .route("/photo", get(handlers::rest::take_photo))
         .route(
-            "/z_scan/{:delta_min}/{:delta_max}/{:steps_between_layers}",
-            get(handlers::rest::z_scan),
+            "/z_scan/{:relative_start_pos}/{:relative_stop_pos}/{:steps_between_layers}",
+            get({
+                let z_scan_dir = options.get_z_scan_dir().await;
+                move |State(state): State<AppState>, Path(path): Path<(i32, i32, u32)>| async move {
+                    handlers::rest::z_scan(State(state), Path(path), z_scan_dir).await
+                }
+            }),
         )
         .route(
             "/stage_z/{:command}",
@@ -164,4 +191,15 @@ async fn main() {
     info!("Listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    let cli_command = CliCommand::parse();
+
+    match cli_command {
+        CliCommand::Serve(options) => {
+            serve(options).await;
+        }
+    }
 }

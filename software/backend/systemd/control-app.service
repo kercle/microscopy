@@ -3,7 +3,7 @@ Description=Camera App Service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/control-app serve
+ExecStart=/usr/local/bin/control-app serve --z-scan-dir /home/koe/control-app-data
 Restart=always
 
 [Install]

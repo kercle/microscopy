@@ -1,10 +1,12 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use axum::extract::{Path, Query, State};
 use axum::{body::Body, response::IntoResponse};
 use bytes::Bytes;
 use communication::{HostCommand, StageMotorCmd};
 use http::Response;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
 use crate::control_app::AppState;
@@ -108,16 +110,29 @@ pub async fn take_photo(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct ZScanMetadata {
+    pub relative_start_pos: i32,
+    pub relative_stop_pos: i32,
+    pub steps_between_layers: u32,
+    pub frame_count: usize,
+    pub uuid: String,
+    pub timestamp: chrono::DateTime<chrono::Local>,
+}
+
 pub async fn z_scan(
     State(state): State<AppState>,
-    Path((delta_min, delta_max, steps_between_layers)): Path<(i32, i32, u32)>,
+    Path((relative_start_pos, relative_stop_pos, steps_between_layers)): Path<(i32, i32, u32)>,
+    z_scan_dir: PathBuf,
 ) -> impl IntoResponse {
     async fn exec(
         state: &AppState,
-        delta_min: i32,
-        delta_max: i32,
+        relative_start_pos: i32,
+        relative_stop_pos: i32,
         steps_between_layers: u32,
-    ) -> Result<()> {
+        z_scan_dir: PathBuf,
+        z_scan_uuid: String,
+    ) -> Result<String> {
         info!("Received z-scan request");
 
         let parameters = {
@@ -127,27 +142,48 @@ pub async fn z_scan(
 
         let app_state_guard = state.with_guard().await?;
         let frames = app_state_guard
-            .z_scan(&parameters, delta_min, delta_max, steps_between_layers)
+            .z_scan(&parameters, relative_start_pos, relative_stop_pos, steps_between_layers)
             .await?;
 
-        // Temporary solution: write frames to a directory
-        // In the future, we need a more robust way to store the images
-        // and also allow accessing them via the API/Web UI
-
-        tokio::fs::create_dir_all("/tmp/microscope_zscans").await?;
+        let z_scan_dir = z_scan_dir.join(&z_scan_uuid);
+        tokio::fs::create_dir_all(&z_scan_dir).await?;
 
         for (idx, frame) in frames.iter().enumerate() {
-            let filename = format!("/tmp/microscope_zscans/microscope-zscan-{:0>4}.jpg", idx);
+            let filename = format!("{}/frame-{:0>4}.jpg", z_scan_dir.display(), idx);
 
             tokio::fs::write(&filename, frame).await?;
             info!("Wrote z-scan frame to file {}", filename);
         }
 
-        Ok(())
+        let metadata = ZScanMetadata {
+            relative_start_pos,
+            relative_stop_pos,
+            steps_between_layers,
+            frame_count: frames.len(),
+            uuid: z_scan_uuid,
+            timestamp: chrono::Local::now(),
+        };
+
+        let metadata_json = serde_json::to_string_pretty(&metadata)?;
+        let metadata_filename = z_scan_dir.join("metadata.json");
+        tokio::fs::write(&metadata_filename, &metadata_json).await?;
+
+        Ok(metadata_json)
     }
 
-    match exec(&state, delta_min, delta_max, steps_between_layers).await {
-        Ok(_) => json_response!(200, json_string!("ok")),
+    let z_scan_uuid = uuid::Uuid::new_v4().to_string();
+
+    match exec(
+        &state,
+        relative_start_pos,
+        relative_stop_pos,
+        steps_between_layers,
+        z_scan_dir,
+        z_scan_uuid,
+    )
+    .await
+    {
+        Ok(metadata) => json_response!(200, metadata),
         Err(err) => json_response!(
             500,
             json_string!(&format!("Failed to perform z-scan: {err}"))
