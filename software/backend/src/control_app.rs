@@ -5,6 +5,7 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
+use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
 use tracing::{info, warn};
@@ -31,7 +32,8 @@ pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
     logs_tx: broadcast::Sender<LogEntry>,
 
-    sem: Arc<Semaphore>,
+    operation_semaphore: Arc<Semaphore>,
+    operation_cancel_token: Arc<RwLock<CancellationToken>>,
 
     pipeline: gst::Pipeline,
     logs: Arc<RwLock<Vec<LogEntry>>>,
@@ -118,7 +120,8 @@ impl AppState {
         let app_state = AppState {
             frame_rx,
             logs_tx,
-            sem: Arc::new(Semaphore::new(1)),
+            operation_cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
+            operation_semaphore: Arc::new(Semaphore::new(1)),
             logs,
             pipeline: AppState::create_pipeline()?,
             parameters_controller: Arc::new(RwLock::new(parameters)),
@@ -132,11 +135,16 @@ impl AppState {
     }
 
     pub async fn with_guard(&self) -> Result<AppStateGuard<'_>> {
-        let permit = self.sem.clone().acquire_owned().await?;
+        let permit = self.operation_semaphore.clone().acquire_owned().await?;
         Ok(AppStateGuard {
             state: self,
             _permit: permit,
         })
+    }
+
+    pub async fn cancel_operation(&self) {
+        let token = self.operation_cancel_token.read().await;
+        token.cancel();
     }
 
     pub async fn update_from_bytes(&self, bytes: Bytes) -> Result<()> {
@@ -215,7 +223,7 @@ impl AppState {
         Ok(photo_pipeline)
     }
 
-    fn pull_nth_sample_data(appsink: &gst_app::AppSink, n: u32) -> Result<Bytes> {
+    async fn pull_nth_sample_data(&self, appsink: &gst_app::AppSink, n: u32) -> Result<Bytes> {
         if n == 0 {
             return Err(anyhow!("n must be greater than 0"));
         }
@@ -223,6 +231,10 @@ impl AppState {
         let mut sample = appsink.pull_sample()?;
 
         for _ in 0..n - 1 {
+            if self.operation_cancel_token.read().await.is_cancelled() {
+                return Err(anyhow!("Operation cancelled"));
+            }
+
             sample = appsink.pull_sample()?;
         }
 
@@ -236,78 +248,6 @@ impl AppState {
 
         Ok(Bytes::copy_from_slice(map.as_slice()))
     }
-
-    async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
-        let photo_pipeline = self.start_photo_pipeline(parameters).await?;
-        let appsink = photo_pipeline
-            .by_name("sink")
-            .unwrap()
-            .downcast::<gst_app::AppSink>()
-            .unwrap();
-
-        let data = Self::pull_nth_sample_data(&appsink, 5)?;
-
-        photo_pipeline.set_state(gst::State::Null)?;
-        self.play_pipeline()?;
-
-        Ok(data)
-    }
-
-    async fn z_scan(
-        &self,
-        parameters: &Parameters,
-        delta_high: i32,
-        delta_low: i32,
-        delta_steps: u32,
-    ) -> Result<Vec<Bytes>> {
-        if delta_high <= delta_low || delta_steps == 0 {
-            return Err(anyhow!("Invalid Z-scan parameters"));
-        }
-
-        if let Some(device_driver) = &self.device_driver {
-            let photo_pipeline = self.start_photo_pipeline(parameters).await?;
-            let appsink = photo_pipeline
-                .by_name("sink")
-                .unwrap()
-                .downcast::<gst_app::AppSink>()
-                .unwrap();
-
-            let mut device_driver = device_driver.lock().await;
-
-            device_driver
-                .stage_move_steps::<String>(delta_high, 1000)
-                .await?;
-
-            let mut current_pos = delta_high;
-            let mut frames = Vec::new();
-            loop {
-                info!("Taking photo at Z position: {}", current_pos);
-                let photo_data = Self::pull_nth_sample_data(&appsink, 5)?;
-                frames.push(photo_data);
-
-                device_driver
-                    .stage_move_steps::<String>(-(delta_steps as i32), 2000)
-                    .await?;
-
-                current_pos -= delta_steps as i32;
-                if current_pos < delta_low {
-                    break;
-                }
-            }
-
-            // Return to initial position
-            device_driver
-                .stage_move_steps::<String>(-current_pos, 1000)
-                .await?;
-
-            photo_pipeline.set_state(gst::State::Null)?;
-            self.play_pipeline()?;
-
-            Ok(frames)
-        } else {
-            Err(anyhow!("Device driver not available for Z-scan"))
-        }
-    }
 }
 
 impl<'a> AppStateGuard<'a> {
@@ -320,7 +260,65 @@ impl<'a> AppStateGuard<'a> {
     }
 
     pub async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
-        self.state.take_photo(parameters).await
+        let photo_pipeline = self.state.start_photo_pipeline(parameters).await?;
+        let appsink = photo_pipeline
+            .by_name("sink")
+            .unwrap()
+            .downcast::<gst_app::AppSink>()
+            .unwrap();
+
+        let ret = self.state.pull_nth_sample_data(&appsink, 5).await;
+
+        photo_pipeline.set_state(gst::State::Null)?;
+        self.play_pipeline()?;
+
+        ret
+    }
+
+    async fn z_scan_internal(
+        &self,
+        photo_pipeline: &gst::Pipeline,
+        delta_low: i32,
+        delta_high: i32,
+        delta_steps: u32,
+    ) -> Result<Vec<Bytes>> {
+        let device_driver = self.state.device_driver.as_ref().unwrap();
+
+        let appsink = photo_pipeline
+            .by_name("sink")
+            .unwrap()
+            .downcast::<gst_app::AppSink>()
+            .unwrap();
+
+        let mut device_driver = device_driver.lock().await;
+
+        device_driver
+            .stage_move_steps::<String>(delta_high, 1000)
+            .await?;
+
+        let mut current_pos = delta_high;
+        let mut frames = Vec::new();
+        loop {
+            info!("Taking photo at Z position: {}", current_pos);
+            let photo_data = self.state.pull_nth_sample_data(&appsink, 5).await?;
+            frames.push(photo_data);
+
+            device_driver
+                .stage_move_steps::<String>(-(delta_steps as i32), 2000)
+                .await?;
+
+            current_pos -= delta_steps as i32;
+            if current_pos < delta_low {
+                break;
+            }
+        }
+
+        // Return to initial position
+        device_driver
+            .stage_move_steps::<String>(-current_pos, 1000)
+            .await?;
+
+        Ok(frames)
     }
 
     pub async fn z_scan(
@@ -330,9 +328,24 @@ impl<'a> AppStateGuard<'a> {
         delta_high: i32,
         delta_steps: u32,
     ) -> Result<Vec<Bytes>> {
-        self.state
-            .z_scan(parameters, delta_high, delta_low, delta_steps)
-            .await
+        if delta_high <= delta_low || delta_steps == 0 {
+            return Err(anyhow!("Invalid Z-scan parameters"));
+        }
+
+        if self.state.device_driver.is_none() {
+            return Err(anyhow!("Device driver not available for Z-scan"));
+        }
+
+        let photo_pipeline = self.state.start_photo_pipeline(parameters).await?;
+
+        let ret = self
+            .z_scan_internal(&photo_pipeline, delta_low, delta_high, delta_steps)
+            .await;
+
+        photo_pipeline.set_state(gst::State::Null)?;
+        self.play_pipeline()?;
+
+        ret
     }
 }
 

@@ -140,6 +140,7 @@ async fn main() {
             post(handlers::rest::update_self).layer(DefaultBodyLimit::max(100 * 1024 * 1024)),
         )
         .route("/update/firmware", post(handlers::rest::update_firmware))
+        .route("/cancel_operation", get(handlers::rest::cancel_operation))
         .route("/photo", get(handlers::rest::take_photo))
         .route(
             "/z_scan/{:delta_min}/{:delta_max}/{:steps_between_layers}",

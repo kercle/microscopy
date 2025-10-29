@@ -5,7 +5,7 @@ use bytes::Bytes;
 use communication::{HostCommand, StageMotorCmd};
 use http::Response;
 use serde::Deserialize;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::control_app::AppState;
 
@@ -57,6 +57,13 @@ pub async fn update_self(State(state): State<AppState>, body: Bytes) -> impl Int
 
 pub async fn update_firmware(State(_state): State<AppState>, _body: Bytes) -> impl IntoResponse {
     json_response!(500, json_string!("not implemented"))
+}
+
+pub async fn cancel_operation(State(state): State<AppState>) -> impl IntoResponse {
+    warn!("Operation was cancelled by user request");
+
+    state.cancel_operation().await;
+    json_response!(200, json_string!("ok"))
 }
 
 pub async fn take_photo(State(state): State<AppState>) -> impl IntoResponse {
