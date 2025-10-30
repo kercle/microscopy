@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Download from "$lib/icons/Download.svelte";
+	import Trash from "$lib/icons/Trash.svelte";
 
 	let scan_list = [
 		{
@@ -104,8 +105,16 @@
 				class="w-full rounded-md"
 			/>
 
+            <div class="bg-base-100 p-4 rounded-box absolute left-0 top-0 ml-4 mt-4 opacity-70 hover:opacity-100">
+                <div class="text-lg font-bold mb-1">Scan Details</div>
+                <div class="text-sm">Start offset steps: 0</div>
+                <div class="text-sm">Stop offset steps: 500</div>
+                <div class="text-sm">Steps between frames: 50</div>
+                <div class="text-sm">Frames: 11</div>
+            </div>
+
 			<ul
-				class="menu bg-base-100 rounded-box absolute left-0 top-0 ml-4 mt-4 w-56 opacity-70 hover:opacity-100"
+				class="menu bg-base-100 rounded-box absolute right-0 top-0 mr-4 mt-4 w-56 opacity-70 hover:opacity-100"
 			>
 				<li>
 					<button class="btn btn-ghost justify-start">
@@ -115,19 +124,7 @@
 				</li>
 				<li>
 					<button class="btn btn-ghost btn-secondary justify-start">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="2.5"
-							stroke="currentColor"
-							class="size-[1.2em]"
-							><path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"
-							/></svg
-						>
+						<Trash />
 						Delete
 					</button>
 				</li>
