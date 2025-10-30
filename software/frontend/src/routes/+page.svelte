@@ -10,6 +10,7 @@
 	import StreamMenu from '$lib/components/StreamMenu.svelte';
 	import ZStageControls from '$lib/components/ZStageControls.svelte';
 	import type { State } from '$lib/state';
+	import SampleScans from '$lib/components/SampleScans.svelte';
 
 	let appState: State = $state({
 		ws: null,
@@ -59,8 +60,8 @@
 				Scans
 			</label>
 			<div class="tab-content bg-base-100 p-6">
-				<p>Sample scans will be implemented here.</p>
-			</div>
+				<SampleScans />
+			</div>	
 
 			<!-- Tab 2: Journal -->
 			<label class="tab">
