@@ -1,3 +1,4 @@
+use std::io::Cursor;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -248,6 +249,43 @@ pub async fn list_z_scans(
             ),
         },
         Err(err) => json_response!(500, json_string!(&format!("Failed to list z-scans: {err}"))),
+    }
+}
+
+pub async fn z_scan_thumbnail(
+    State(_state): State<AppState>,
+    Path((uuid, frame_idx, bound)): Path<(String, usize, u32)>,
+    z_scan_dir: PathBuf,
+) -> impl IntoResponse {
+    async fn exec(z_scan_dir: PathBuf, uuid: String, frame_id: usize, bound: u32) -> Result<Bytes> {
+        let frame_path = z_scan_dir
+            .join(&uuid)
+            .join(format!("frame-{:0>4}.jpg", frame_id));
+
+        let frame_data = tokio::fs::read(&frame_path).await?;
+        let img = image::load_from_memory(&frame_data)?;
+
+        let thumbnail = img.thumbnail(bound, bound);
+
+        let mut thumbnail_data: Vec<u8> = Vec::new();
+        let mut cursor: Cursor<&mut Vec<u8>> = Cursor::new(&mut thumbnail_data);
+        thumbnail.write_to(&mut cursor, image::ImageFormat::Jpeg)?;
+        Ok(Bytes::from(thumbnail_data))
+    }
+
+    match exec(z_scan_dir, uuid, frame_idx, bound).await {
+        Ok(thumbnail_data) => Response::builder()
+            .status(200)
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .header("Content-Type", "image/jpeg")
+            .header("Content-Length", thumbnail_data.len().to_string())
+            .body(Body::from(thumbnail_data))
+            .unwrap(),
+        Err(err) => json_response!(
+            500,
+            json_string!(&format!("Failed to generate z-scan thumbnail: {err}"))
+        ),
     }
 }
 

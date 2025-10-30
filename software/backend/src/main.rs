@@ -182,6 +182,14 @@ async fn serve(options: ServeOptions) {
                 }
             }),
         )
+        .route("/z_scan_thumbnail/{:uuid}/{:frame_idx}/{:width}", 
+            get({
+                let z_scan_dir = options.get_z_scan_dir().await;
+                move |State(state): State<AppState>, Path(path): Path<(String, usize, u32)>| async move {
+                    handlers::rest::z_scan_thumbnail(State(state), Path(path), z_scan_dir).await
+                }
+            }),
+        )
         .route(
             "/stage_z/{:command}",
             get(handlers::rest::stage_z_motor_command),
