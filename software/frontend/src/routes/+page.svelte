@@ -5,6 +5,7 @@
 	import Drawer from '$lib/icons/Drawer.svelte';
 	import LogsJournal from '$lib/components/LogsJournal.svelte';
 	import Live from '$lib/icons/Live.svelte';
+	import Layers from '$lib/icons/Layers.svelte';
 	import Journal from '$lib/icons/Journal.svelte';
 	import StreamMenu from '$lib/components/StreamMenu.svelte';
 	import ZStageControls from '$lib/components/ZStageControls.svelte';
@@ -49,6 +50,16 @@
 					draggable="false"
 				/>
 				<StreamMenu bind:appState />
+			</div>
+
+			<!-- Tab 3: Sample scans -->
+			<label class="tab">
+				<input type="radio" name="main-tabs" />
+				<Layers />
+				Scans
+			</label>
+			<div class="tab-content bg-base-100 p-6">
+				<p>Sample scans will be implemented here.</p>
 			</div>
 
 			<!-- Tab 2: Journal -->
