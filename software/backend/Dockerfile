@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM debian:bookworm-20251020
 
 # Basic packages
 RUN apt-get update \
