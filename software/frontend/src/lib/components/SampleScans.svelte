@@ -94,6 +94,7 @@
 					src="/api/z_scan_thumbnail/{data[selectedIdx].uuid}/0/800"
 					alt="Preview"
 					class="w-full rounded-md"
+					draggable="false"
 				/>
 
 				<div
