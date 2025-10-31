@@ -1,73 +1,63 @@
 <script lang="ts">
-	import Download from "$lib/icons/Download.svelte";
-	import Trash from "$lib/icons/Trash.svelte";
+	import Download from '$lib/icons/Download.svelte';
+	import Trash from '$lib/icons/Trash.svelte';
+	import { onMount } from 'svelte';
 
-	let scan_list = [
-		{
-			relative_start_pos: 0,
-			relative_stop_pos: 500,
-			steps_between_layers: 50,
-			frame_count: 11,
-			uuid: '52017258-2d78-4c13-b341-33ebd49d3a8f',
-			timestamp: '2025-10-29T23:05:42.868471485+01:00'
-		},
-		{
-			relative_start_pos: 0,
-			relative_stop_pos: 1000,
-			steps_between_layers: 100,
-			frame_count: 1,
-			uuid: '2a9b0e04-9e2b-4a16-a75d-b183d0e807f2',
-			timestamp: '2025-10-29T23:04:09.629753052+01:00'
-		},
-		{
-			relative_start_pos: 0,
-			relative_stop_pos: 500,
-			steps_between_layers: 50,
-			frame_count: 11,
-			uuid: '60cef4a6-b4bb-4643-8a0d-69a7015cc18c',
-			timestamp: '2025-10-29T23:06:08.537632636+01:00'
-		},
-		{
-			relative_start_pos: -100,
-			relative_stop_pos: 100,
-			steps_between_layers: 10,
-			frame_count: 21,
-			uuid: 'e4a5f501-0865-4b0b-9840-98744fce5d4e',
-			timestamp: '2025-10-30T00:58:56.071188199+01:00'
-		},
-		{
-			relative_start_pos: -10,
-			relative_stop_pos: 10,
-			steps_between_layers: 2,
-			frame_count: 11,
-			uuid: '67cae7a7-704c-4beb-a403-4ecb97545956',
-			timestamp: '2025-10-30T00:58:12.081582815+01:00'
-		},
-		{
-			relative_start_pos: -500,
-			relative_stop_pos: 500,
-			steps_between_layers: 100,
-			frame_count: 11,
-			uuid: '1d1e8a40-85cd-4a3a-be99-73dcd49e76f6',
-			timestamp: '2025-10-29T23:16:29.286858242+01:00'
-		},
-		{
-			relative_start_pos: 500,
-			relative_stop_pos: 0,
-			steps_between_layers: 50,
-			frame_count: 11,
-			uuid: '42367e0e-fe5a-4363-808b-d4ed1bcbb140',
-			timestamp: '2025-10-29T23:06:30.042023606+01:00'
-		},
-		{
-			relative_start_pos: 0,
-			relative_stop_pos: 1000,
-			steps_between_layers: 100,
-			frame_count: 1,
-			uuid: '8f1d6485-e520-4494-9130-03ca012b475a',
-			timestamp: '2025-10-29T23:03:58.789666987+01:00'
+	type ScanEntry = {
+		timestamp: string;
+		frame_count: number;
+		relative_start_pos: number;
+		relative_stop_pos: number;
+		steps_between_layers: number;
+		uuid: string;
+	};
+
+	let frameSlider: HTMLInputElement;
+    let previewImage: HTMLImageElement;
+
+	let data: ScanEntry[] = [];
+	let selectedIdx: number | null = null;
+
+	const selectIdx = (idx: number) => {
+		selectedIdx = idx;
+		frameSlider.value = '0';
+	};
+
+    const updatePreviewImage = () => {
+        if (selectedIdx === null) return;
+        previewImage.src = `/api/z_scan_thumbnail/${data[selectedIdx].uuid}/${frameSlider.value}/800`;
+    };
+
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/list_z_scans');
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			data = await res.json();
+
+			// data = [
+			// 	{
+			// 		timestamp: '2024-06-01T12:00:00Z',
+			// 		frame_count: 150,
+			// 		relative_start_pos: 0,
+			// 		relative_stop_pos: 3000,
+			// 		steps_between_layers: 20,
+			// 		uuid: '123e4567-e89b-12d3-a456-426614174000'
+			// 	},
+			// 	{
+			// 		timestamp: '2024-06-02T15:30:00Z',
+			// 		frame_count: 200,
+			// 		relative_start_pos: 100,
+			// 		relative_stop_pos: 4100,
+			// 		steps_between_layers: 20,
+			// 		uuid: '123e4567-e89b-12d3-a456-426614174001'
+			// 	}
+			// ];
+
+			selectedIdx = data.length > 0 ? 0 : null;
+		} catch (err) {
+			console.error('Failed to fetch data:', err);
 		}
-	];
+	});
 </script>
 
 <div
@@ -76,67 +66,73 @@
 	<div
 		class="divide-base-300 flex flex-col divide-y rounded-md lg:h-[calc(100vh-90px)] lg:overflow-y-auto"
 	>
-		{#each scan_list as scan}
-			<div class="flex flex-row items-start gap-8 p-2">
-				<div>
-					<img
-						src="https://images.unsplash.com/photo-1733665825622-5f84dfd0717b?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=70"
-						alt="Sample Scan 1"
-						class="rounded-md"
-					/>
+		{#each data as entry, idx}
+			<button
+				class="hover:bg-base-200 flex cursor-pointer flex-row items-start gap-8 p-2 text-left"
+				onclick={() => selectIdx(idx)}
+			>
+				<div class="pointer-events-none">
+					<img src="/api/z_scan_thumbnail/{entry.uuid}/0/100" alt="Thumbnail" class="rounded-md" />
 				</div>
-				<div class="flex-2 w-100">
+				<div class="flex-2 w-100 pointer-events">
 					<div class="text-sm font-bold">
-						{new Date(scan.timestamp).toLocaleString()}
+						{new Date(entry.timestamp).toLocaleString()}
 					</div>
 					<div class="text-sm opacity-50">
-						{scan.frame_count} frames
+						{entry.frame_count} frames
 					</div>
 				</div>
-			</div>
+			</button>
 		{/each}
 	</div>
 	<div class="divider divider-horizontal lg:flex"></div>
 	<div class="flex w-[100%] flex-col items-center gap-2 overflow-y-auto">
-		<div class="relative w-full">
-			<img
-				src="https://images.unsplash.com/photo-1733665825622-5f84dfd0717b?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=800"
-				alt="Sample Scan 1"
-				class="w-full rounded-md"
-			/>
+		{#if selectedIdx !== null}
+			<div class="relative w-full">
+				<img
+                    bind:this={previewImage}
+					src="/api/z_scan_thumbnail/{data[selectedIdx].uuid}/0/800"
+					alt="Preview"
+					class="w-full rounded-md"
+				/>
 
-            <div class="bg-base-100 p-4 rounded-box absolute left-0 top-0 ml-4 mt-4 opacity-70 hover:opacity-100">
-                <div class="text-lg font-bold mb-1">Scan Details</div>
-                <div class="text-sm">Start offset steps: 0</div>
-                <div class="text-sm">Stop offset steps: 500</div>
-                <div class="text-sm">Steps between frames: 50</div>
-                <div class="text-sm">Frames: 11</div>
-            </div>
+				<div
+					class="bg-base-100 rounded-box absolute left-0 top-0 ml-4 mt-4 p-4 opacity-70 hover:opacity-100"
+				>
+					<div class="mb-1 text-lg font-bold">Scan Details</div>
+					<div class="text-sm">Start offset steps: {data[selectedIdx].relative_start_pos}</div>
+					<div class="text-sm">Stop offset steps: {data[selectedIdx].relative_stop_pos}</div>
+					<div class="text-sm">Steps between frames: {data[selectedIdx].steps_between_layers}</div>
+					<div class="text-sm">Frames: {data[selectedIdx].frame_count}</div>
+				</div>
 
-			<ul
-				class="menu bg-base-100 rounded-box absolute right-0 top-0 mr-4 mt-4 w-56 opacity-70 hover:opacity-100"
-			>
-				<li>
-					<button class="btn btn-ghost justify-start">
-						<Download />
-						Download
-					</button>
-				</li>
-				<li>
-					<button class="btn btn-ghost btn-secondary justify-start">
-						<Trash />
-						Delete
-					</button>
-				</li>
-			</ul>
+				<ul
+					class="menu bg-base-100 rounded-box absolute right-0 top-0 mr-4 mt-4 w-56 opacity-70 hover:opacity-100"
+				>
+					<li>
+						<button class="btn btn-ghost justify-start">
+							<Download />
+							Download
+						</button>
+					</li>
+					<li>
+						<button class="btn btn-ghost btn-secondary justify-start">
+							<Trash />
+							Delete
+						</button>
+					</li>
+				</ul>
 
-			<input
-				type="range"
-				min="0"
-				max="100"
-				value="40"
-				class="range absolute bottom-0 left-0 mb-4 ml-[1rem] w-[calc(100%-2rem)] opacity-70 hover:opacity-100"
-			/>
-		</div>
+				<input
+					bind:this={frameSlider}
+					type="range"
+					min="0"
+					max={data[selectedIdx].frame_count - 1}
+					value="0"
+					class="range absolute bottom-0 left-0 mb-4 ml-[1rem] w-[calc(100%-2rem)] opacity-70 hover:opacity-100"
+                    onchange={updatePreviewImage}
+				/>
+			</div>
+		{/if}
 	</div>
 </div>
