@@ -258,6 +258,19 @@ pub async fn z_scan_thumbnail(
     z_scan_dir: PathBuf,
 ) -> impl IntoResponse {
     async fn exec(z_scan_dir: PathBuf, uuid: String, frame_id: usize, bound: u32) -> Result<Bytes> {
+        let thumbnail_dir = z_scan_dir
+            .join(&uuid)
+            .join("thumbnails")
+            .join(format!("{bound}"));
+        tokio::fs::create_dir_all(&thumbnail_dir).await?;
+
+        let frame_thumbnail_file = thumbnail_dir.join(format!("frame-{:0>4}.jpg", frame_id));
+
+        if tokio::fs::try_exists(&frame_thumbnail_file).await? {
+            let thumbnail_data = tokio::fs::read(&frame_thumbnail_file).await?;
+            return Ok(Bytes::from(thumbnail_data));
+        }
+
         let frame_path = z_scan_dir
             .join(&uuid)
             .join(format!("frame-{:0>4}.jpg", frame_id));
@@ -270,6 +283,9 @@ pub async fn z_scan_thumbnail(
         let mut thumbnail_data: Vec<u8> = Vec::new();
         let mut cursor: Cursor<&mut Vec<u8>> = Cursor::new(&mut thumbnail_data);
         thumbnail.write_to(&mut cursor, image::ImageFormat::Jpeg)?;
+
+        tokio::fs::write(&frame_thumbnail_file, &thumbnail_data).await?;
+
         Ok(Bytes::from(thumbnail_data))
     }
 
