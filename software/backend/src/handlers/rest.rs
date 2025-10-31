@@ -252,6 +252,22 @@ pub async fn list_z_scans(
     }
 }
 
+pub async fn delete_z_scan(
+    State(_state): State<AppState>,
+    Path(uuid): Path<String>,
+    z_scan_dir: PathBuf,
+) -> impl IntoResponse {
+    let scan_dir = z_scan_dir.join(&uuid);
+
+    match tokio::fs::remove_dir_all(&scan_dir).await {
+        Ok(_) => json_response!(200, json_string!("ok")),
+        Err(err) => json_response!(
+            500,
+            json_string!(&format!("Failed to delete z-scan: {err}"))
+        ),
+    }
+}
+
 pub async fn z_scan_thumbnail(
     State(_state): State<AppState>,
     Path((uuid, frame_idx, bound)): Path<(String, usize, u32)>,

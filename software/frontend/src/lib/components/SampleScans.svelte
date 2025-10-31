@@ -30,6 +30,23 @@
 		}
 	};
 
+	const deleteSelectedScan = async () => {
+		if (selectedIdx === null) return;
+
+		const uuid = data[selectedIdx].uuid;
+
+		const res = await fetch(`/api/delete_z_scan/${uuid}`, {
+			method: 'DELETE'
+		});
+		if (!res.ok) {
+			console.error(`Failed to delete z-scan ${uuid}: HTTP ${res.status}`);
+			return;
+		}
+
+		data.splice(selectedIdx, 1);
+		selectedIdx = data.length > 0 ? 0 : null;
+	};
+
 	const updatePreviewImage = () => {
 		if (selectedIdx === null || frameSlider === undefined || previewImage === undefined) return;
 		previewImage.src = `/api/z_scan_thumbnail/${data[selectedIdx].uuid}/${frameSlider.value}/800`;
@@ -178,7 +195,7 @@
 						</button>
 					</li>
 					<li>
-						<button class="btn btn-ghost btn-secondary justify-start">
+						<button class="btn btn-ghost btn-secondary justify-start" onclick={deleteSelectedScan}>
 							<Trash />
 							Delete
 						</button>

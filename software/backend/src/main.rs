@@ -1,6 +1,6 @@
 use anyhow::Result;
 use axum::extract::{DefaultBodyLimit, Path, State};
-use axum::{Router, routing::get, routing::patch, routing::post};
+use axum::{Router, routing::delete, routing::get, routing::patch, routing::post};
 use bytes::Bytes;
 use clap::Parser;
 use communication::DeviceEvent;
@@ -170,6 +170,15 @@ async fn serve(options: ServeOptions) {
                 let z_scan_dir = options.get_z_scan_dir().await;
                 move |State(state): State<AppState>, Path(path): Path<(i32, i32, u32)>| async move {
                     handlers::rest::z_scan(State(state), Path(path), z_scan_dir).await
+                }
+            }),
+        )
+        .route(
+            "/delete_z_scan/{uuid}",
+            delete({
+                let z_scan_dir = options.get_z_scan_dir().await;
+                move |State(state): State<AppState>, Path(uuid): Path<String>| async move {
+                    handlers::rest::delete_z_scan(State(state), Path(uuid), z_scan_dir).await
                 }
             }),
         )
