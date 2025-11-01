@@ -153,7 +153,7 @@
 			>
 				<div class="pointer-events-none">
 					<img
-						src="{Z_SCAN_API_BASE}/thumbnail/{entry.uuid}/0/80"
+						src="{Z_SCAN_API_BASE}/thumbnail/{entry.uuid}/{Math.floor(entry.frame_count / 2)}/80"
 						alt="Thumbnail"
 						class="rounded-md"
 					/>
