@@ -5,6 +5,7 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
 use tokio_util::sync::CancellationToken;
@@ -20,6 +21,11 @@ pub struct LogEntry {
     pub timestamp: String,
     pub level: String,
     pub message: String,
+}
+
+#[derive(Clone)]
+pub struct Config {
+    pub z_scan_dir: PathBuf,
 }
 
 pub struct AppStateGuard<'a> {
@@ -41,6 +47,8 @@ pub struct AppState {
     pub device_driver: Option<Arc<Mutex<DeviceDriver>>>,
 
     pub parameters_controller: Arc<RwLock<ParametersController>>,
+
+    pub config: Config,
 }
 
 impl AppState {
@@ -114,6 +122,7 @@ impl AppState {
         logs: Arc<RwLock<Vec<LogEntry>>>,
         device_driver: Option<Arc<Mutex<DeviceDriver>>>,
         parameters: ParametersController,
+        config: Config,
     ) -> Result<AppState> {
         let (logs_tx, _logs_rx) = broadcast::channel(MAX_LOG_ENTRIES);
 
@@ -126,6 +135,7 @@ impl AppState {
             pipeline: AppState::create_pipeline()?,
             parameters_controller: Arc::new(RwLock::new(parameters)),
             device_driver,
+            config,
         };
 
         app_state.set_awb_enable(true);

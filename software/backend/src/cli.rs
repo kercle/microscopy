@@ -4,18 +4,18 @@ use std::sync::Arc;
 use axum::extract::{DefaultBodyLimit, Path};
 use axum::{Router, routing::get, routing::patch, routing::post};
 use bytes::Bytes;
+use clap::Parser;
 use tokio::sync::watch;
 use tracing::{error, info, warn};
-use clap::Parser;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use communication::driver::DeviceDriver;
 
-use crate::parameters::ParametersController;
+use crate::camera;
 use crate::control_app::AppState;
 use crate::device_monitor;
 use crate::handlers;
-use crate::camera;
+use crate::parameters::ParametersController;
 
 #[derive(Parser)]
 pub struct ServeOptions {
@@ -61,10 +61,12 @@ pub async fn serve(options: ServeOptions) -> AppState {
             warn!("No device found on /dev/ttyUSB0");
             None
         };
-    let app_state =
-        AppState::new(frame_rx, logs, device_driver, parameters_controller)
-            .await
-            .unwrap();
+    let config = crate::control_app::Config {
+        z_scan_dir: options.get_z_scan_dir().await,
+    };
+    let app_state = AppState::new(frame_rx, logs, device_driver, parameters_controller, config)
+        .await
+        .unwrap();
 
     init_tracing(&app_state);
     info!("Starting control-app backend");
@@ -123,7 +125,7 @@ pub async fn serve(options: ServeOptions) -> AppState {
         )
         .nest(
             "/z-scan",
-            handlers::rest::z_scan::get_router(app_state.clone(), options.get_z_scan_dir().await),
+            handlers::rest::z_scan::get_router(app_state.clone()),
         )
         .with_state(app_state.clone());
 

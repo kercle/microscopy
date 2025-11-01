@@ -11,42 +11,17 @@ use tracing::{info, warn};
 
 use crate::control_app::AppState;
 
-pub fn get_router(app_state: AppState, z_scan_dir: PathBuf) -> Router<AppState> {
+pub fn get_router(app_state: AppState) -> Router<AppState> {
     Router::new()
         .route(
             "/record/{:relative_start_pos}/{:relative_stop_pos}/{:steps_between_layers}",
-            routing::get({
-                let z_scan_dir = z_scan_dir.clone();
-                move |State(state): State<AppState>, Path(path): Path<(i32, i32, u32)>| async move {
-                    record(State(state), Path(path), z_scan_dir).await
-                }
-            }),
+            routing::get(record),
         )
+        .route("/delete/{uuid}", routing::delete(delete))
+        .route("/list", routing::get(list))
         .route(
-            "/delete/{uuid}",
-            routing::delete({
-                let z_scan_dir = z_scan_dir.clone();
-                move |State(state): State<AppState>, Path(uuid): Path<String>| async move {
-                    delete(State(state), Path(uuid), z_scan_dir).await
-                }
-            }),
-        )
-        .route(
-            "/list",
-            routing::get({
-                let z_scan_dir = z_scan_dir.clone();
-                move |State(state): State<AppState>| async move {
-                    list(State(state), z_scan_dir).await
-                }
-            }),
-        )
-        .route("/thumbnail/{:uuid}/{:frame_idx}/{:width}", 
-            routing::get({
-                let z_scan_dir = z_scan_dir.clone();
-                move |State(state): State<AppState>, Path(path): Path<(String, usize, u32)>| async move {
-                    thumbnail(State(state), Path(path), z_scan_dir).await
-                }
-            }),
+            "/thumbnail/{:uuid}/{:frame_idx}/{:width}",
+            routing::get(thumbnail),
         )
         .with_state(app_state)
 }
@@ -64,7 +39,6 @@ pub struct ZScanMetadata {
 pub async fn record(
     State(state): State<AppState>,
     Path((relative_start_pos, relative_stop_pos, steps_between_layers)): Path<(i32, i32, u32)>,
-    z_scan_dir: PathBuf,
 ) -> impl IntoResponse {
     async fn exec(
         state: &AppState,
@@ -124,7 +98,7 @@ pub async fn record(
         relative_start_pos,
         relative_stop_pos,
         steps_between_layers,
-        z_scan_dir,
+        state.config.z_scan_dir.clone(),
         z_scan_uuid,
     )
     .await
@@ -137,7 +111,7 @@ pub async fn record(
     }
 }
 
-pub async fn list(State(_state): State<AppState>, z_scan_dir: PathBuf) -> impl IntoResponse {
+pub async fn list(State(state): State<AppState>) -> impl IntoResponse {
     async fn exec(z_scan_dir: PathBuf) -> Result<Vec<ZScanMetadata>> {
         let mut scans = Vec::new();
 
@@ -177,7 +151,7 @@ pub async fn list(State(_state): State<AppState>, z_scan_dir: PathBuf) -> impl I
         Ok(scans)
     }
 
-    match exec(z_scan_dir).await {
+    match exec(state.config.z_scan_dir.clone()).await {
         Ok(scans) => match serde_json::to_string(&scans) {
             Ok(body) => json_response!(200, body),
             Err(err) => json_response!(
@@ -189,12 +163,8 @@ pub async fn list(State(_state): State<AppState>, z_scan_dir: PathBuf) -> impl I
     }
 }
 
-pub async fn delete(
-    State(_state): State<AppState>,
-    Path(uuid): Path<String>,
-    z_scan_dir: PathBuf,
-) -> impl IntoResponse {
-    let scan_dir = z_scan_dir.join(&uuid);
+pub async fn delete(State(state): State<AppState>, Path(uuid): Path<String>) -> impl IntoResponse {
+    let scan_dir = state.config.z_scan_dir.join(&uuid);
 
     match tokio::fs::remove_dir_all(&scan_dir).await {
         Ok(_) => json_response!(200, json_string!("ok")),
@@ -206,9 +176,8 @@ pub async fn delete(
 }
 
 pub async fn thumbnail(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path((uuid, frame_idx, bound)): Path<(String, usize, u32)>,
-    z_scan_dir: PathBuf,
 ) -> impl IntoResponse {
     async fn exec(z_scan_dir: PathBuf, uuid: String, frame_id: usize, bound: u32) -> Result<Bytes> {
         let thumbnail_dir = z_scan_dir
@@ -242,7 +211,7 @@ pub async fn thumbnail(
         Ok(Bytes::from(thumbnail_data))
     }
 
-    match exec(z_scan_dir, uuid, frame_idx, bound).await {
+    match exec(state.config.z_scan_dir.clone(), uuid, frame_idx, bound).await {
         Ok(thumbnail_data) => Response::builder()
             .status(200)
             .header("Cache-Control", "no-cache")
