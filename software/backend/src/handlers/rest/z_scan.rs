@@ -3,13 +3,53 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use axum::extract::{Path, State};
-use axum::{body::Body, response::IntoResponse};
+use axum::{Router, body::Body, response::IntoResponse, routing};
 use bytes::Bytes;
 use http::Response;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::control_app::AppState;
+
+pub fn get_router(app_state: AppState, z_scan_dir: PathBuf) -> Router<AppState> {
+    Router::new()
+        .route(
+            "/record/{:relative_start_pos}/{:relative_stop_pos}/{:steps_between_layers}",
+            routing::get({
+                let z_scan_dir = z_scan_dir.clone();
+                move |State(state): State<AppState>, Path(path): Path<(i32, i32, u32)>| async move {
+                    record(State(state), Path(path), z_scan_dir).await
+                }
+            }),
+        )
+        .route(
+            "/delete/{uuid}",
+            routing::delete({
+                let z_scan_dir = z_scan_dir.clone();
+                move |State(state): State<AppState>, Path(uuid): Path<String>| async move {
+                    delete(State(state), Path(uuid), z_scan_dir).await
+                }
+            }),
+        )
+        .route(
+            "/list",
+            routing::get({
+                let z_scan_dir = z_scan_dir.clone();
+                move |State(state): State<AppState>| async move {
+                    list(State(state), z_scan_dir).await
+                }
+            }),
+        )
+        .route("/thumbnail/{:uuid}/{:frame_idx}/{:width}", 
+            routing::get({
+                let z_scan_dir = z_scan_dir.clone();
+                move |State(state): State<AppState>, Path(path): Path<(String, usize, u32)>| async move {
+                    thumbnail(State(state), Path(path), z_scan_dir).await
+                }
+            }),
+        )
+        .with_state(app_state)
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct ZScanMetadata {
@@ -97,10 +137,7 @@ pub async fn record(
     }
 }
 
-pub async fn list(
-    State(_state): State<AppState>,
-    z_scan_dir: PathBuf,
-) -> impl IntoResponse {
+pub async fn list(State(_state): State<AppState>, z_scan_dir: PathBuf) -> impl IntoResponse {
     async fn exec(z_scan_dir: PathBuf) -> Result<Vec<ZScanMetadata>> {
         let mut scans = Vec::new();
 

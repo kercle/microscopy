@@ -3,6 +3,8 @@
 	import Trash from '$lib/icons/Trash.svelte';
 	import { onMount } from 'svelte';
 
+	const Z_SCAN_API_BASE = '/api/z-scan';
+
 	type ScanEntry = {
 		timestamp: string;
 		frame_count: number;
@@ -35,7 +37,7 @@
 
 		const uuid = data[selectedIdx].uuid;
 
-		const res = await fetch(`/api/delete_z_scan/${uuid}`, {
+		const res = await fetch(`${Z_SCAN_API_BASE}/delete/${uuid}`, {
 			method: 'DELETE'
 		});
 		if (!res.ok) {
@@ -49,11 +51,11 @@
 
 	const updatePreviewImage = () => {
 		if (selectedIdx === null || frameSlider === undefined || previewImage === undefined) return;
-		previewImage.src = `/api/z_scan_thumbnail/${data[selectedIdx].uuid}/${frameSlider.value}/800`;
+		previewImage.src = `${Z_SCAN_API_BASE}/thumbnail/${data[selectedIdx].uuid}/${frameSlider.value}/800`;
 	};
 
 	const updateZScanData = async () => {
-		const res = await fetch('/api/list_z_scans');
+		const res = await fetch(`${Z_SCAN_API_BASE}/list`);
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
 		data = await res.json();
 
@@ -84,7 +86,7 @@
 		const stopOffset = parseInt(stopOffsetInput.value, 10);
 		const stepsBetween = parseInt(stepsBetweenInput.value, 10);
 
-		fetch(`/api/z_scan/${startOffset}/${stopOffset}/${stepsBetween}`)
+		fetch(`${Z_SCAN_API_BASE}/record/${startOffset}/${stopOffset}/${stepsBetween}`)
 			.then((res) => {
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 				return res.json();
@@ -150,7 +152,11 @@
 				onclick={() => selectIdx(idx)}
 			>
 				<div class="pointer-events-none">
-					<img src="/api/z_scan_thumbnail/{entry.uuid}/0/80" alt="Thumbnail" class="rounded-md" />
+					<img
+						src="{Z_SCAN_API_BASE}/thumbnail/{entry.uuid}/0/80"
+						alt="Thumbnail"
+						class="rounded-md"
+					/>
 				</div>
 				<div class="flex-2 w-90 pointer-events">
 					<div class="text-sm font-bold">
@@ -169,7 +175,7 @@
 			<div class="relative w-full">
 				<img
 					bind:this={previewImage}
-					src="/api/z_scan_thumbnail/{data[selectedIdx].uuid}/0/800"
+					src="{Z_SCAN_API_BASE}/thumbnail/{data[selectedIdx].uuid}/0/800"
 					alt="Preview"
 					class="w-full rounded-md"
 					draggable="false"

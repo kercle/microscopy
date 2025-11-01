@@ -1,55 +1,16 @@
 use anyhow::Result;
-use axum::extract::{DefaultBodyLimit, Path, State};
-use axum::{Router, routing::delete, routing::get, routing::patch, routing::post};
-use bytes::Bytes;
 use clap::Parser;
 use communication::DeviceEvent;
-use communication::driver::DeviceDriver;
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::watch;
 use tracing::{error, info, warn};
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-use parameters::ParametersController;
-
-use crate::control_app::AppState;
+use crate::cli::{CliCommand, serve};
 
 mod camera;
+mod cli;
 mod control_app;
 mod handlers;
 mod parameters;
-
-#[derive(Parser)]
-struct ServeOptions {
-    #[clap(long, default_value = "/tmp/microscope_zscans")]
-    z_scan_dir: PathBuf,
-}
-
-impl ServeOptions {
-    async fn get_z_scan_dir(&self) -> PathBuf {
-        tokio::fs::create_dir_all(&self.z_scan_dir)
-            .await
-            .expect("Failed to create z-scan directory");
-        self.z_scan_dir.clone()
-    }
-}
-
-#[derive(Parser)]
-enum CliCommand {
-    Serve(ServeOptions),
-}
-
-fn init_tracing(app_state: &control_app::AppState) {
-    tracing_subscriber::registry()
-        .with(EnvFilter::new("info"))
-        .with(tracing_subscriber::fmt::layer())
-        .with(app_state.clone())
-        .init();
-    tracing_gstreamer::integrate_events();
-    gstreamer::log::remove_default_log_function();
-}
 
 async fn device_monitor(app_state: control_app::AppState) -> Result<()> {
     let driver = if let Some(driver) = &app_state.device_driver {
@@ -92,131 +53,6 @@ async fn device_monitor(app_state: control_app::AppState) -> Result<()> {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     }
-}
-
-async fn serve(options: ServeOptions) {
-    let parameters_controller = ParametersController::new();
-    let mut state_notify = parameters_controller.subscribe_changes();
-
-    let (frame_tx, frame_rx) = watch::channel::<Arc<Bytes>>(Arc::new(Bytes::new()));
-    let logs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-    let device_driver =
-        if let Ok(device_driver) = DeviceDriver::new(&PathBuf::from("/dev/ttyUSB0"), 115200) {
-            info!("Connecting to device on /dev/ttyUSB0");
-            Some(Arc::new(tokio::sync::Mutex::new(device_driver)))
-        } else {
-            warn!("No device found on /dev/ttyUSB0");
-            None
-        };
-    let app_state =
-        control_app::AppState::new(frame_rx, logs, device_driver, parameters_controller)
-            .await
-            .unwrap();
-
-    init_tracing(&app_state);
-    info!("Starting control-app backend");
-
-    let app_state_clone = app_state.clone();
-    tokio::spawn(async move {
-        if let Err(err) = device_monitor(app_state_clone.clone()).await {
-            error!("Device monitor error: {err}");
-        }
-    });
-
-    let app_state_clone = app_state.clone();
-    tokio::spawn(async move {
-        let app_state = app_state_clone;
-
-        loop {
-            tokio::select! {
-                ret = state_notify.changed() => {
-                    if ret.is_err() {
-                        // Sender dropped
-                        break;
-                    }
-
-                    let params = {
-                        let p = state_notify.borrow_and_update();
-                        p.clone()
-                    };
-
-                    let app_state_guard = app_state.with_guard().await.unwrap();
-                    app_state_guard.stop_pipeline().unwrap();
-                    params.camera_properties.write_to_source(&app_state.get_source());
-                    app_state_guard.play_pipeline().unwrap();
-                }
-            }
-        }
-    });
-
-    let sink = app_state.get_sink();
-    tokio::spawn(camera::produce_frames(frame_tx, sink));
-
-    let api_routes = Router::new()
-        .route("/stream", get(handlers::stream::get_stream_mjpeg))
-        .route("/ws", get(handlers::ws::ws_handler))
-        .route("/parameters", patch(handlers::rest::patch_parameters))
-        .route("/parameters", get(handlers::rest::get_parameters))
-        .route(
-            "/update/self",
-            post(handlers::rest::update_self).layer(DefaultBodyLimit::max(100 * 1024 * 1024)),
-        )
-        .route("/update/firmware", post(handlers::rest::update_firmware))
-        .route("/cancel_operation", get(handlers::rest::cancel_operation))
-        .route("/photo", get(handlers::rest::take_photo))
-        .route(
-            "/z_scan/{:relative_start_pos}/{:relative_stop_pos}/{:steps_between_layers}",
-            get({
-                let z_scan_dir = options.get_z_scan_dir().await;
-                move |State(state): State<AppState>, Path(path): Path<(i32, i32, u32)>| async move {
-                    handlers::rest::z_scan::record(State(state), Path(path), z_scan_dir).await
-                }
-            }),
-        )
-        .route(
-            "/delete_z_scan/{uuid}",
-            delete({
-                let z_scan_dir = options.get_z_scan_dir().await;
-                move |State(state): State<AppState>, Path(uuid): Path<String>| async move {
-                    handlers::rest::z_scan::delete(State(state), Path(uuid), z_scan_dir).await
-                }
-            }),
-        )
-        .route(
-            "/list_z_scans",
-            get({
-                let z_scan_dir = options.get_z_scan_dir().await;
-                move |State(state): State<AppState>| async move {
-                    handlers::rest::z_scan::list(State(state), z_scan_dir).await
-                }
-            }),
-        )
-        .route("/z_scan_thumbnail/{:uuid}/{:frame_idx}/{:width}", 
-            get({
-                let z_scan_dir = options.get_z_scan_dir().await;
-                move |State(state): State<AppState>, Path(path): Path<(String, usize, u32)>| async move {
-                    handlers::rest::z_scan::thumbnail(State(state), Path(path), z_scan_dir).await
-                }
-            }),
-        )
-        .route(
-            "/stage_z/{:command}",
-            get(handlers::rest::stage_z_motor_command),
-        )
-        .with_state(app_state);
-
-    let app = Router::new()
-        .nest("/api", api_routes)
-        .route("/{*path}", get(handlers::asset_response))
-        .route(
-            "/",
-            get(|| handlers::asset_response(Path("index.html".to_string()))),
-        );
-
-    let addr = "0.0.0.0:3000";
-    info!("Listening on http://{addr}");
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
 }
 
 #[tokio::main]
