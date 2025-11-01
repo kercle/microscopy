@@ -169,7 +169,7 @@ async fn serve(options: ServeOptions) {
             get({
                 let z_scan_dir = options.get_z_scan_dir().await;
                 move |State(state): State<AppState>, Path(path): Path<(i32, i32, u32)>| async move {
-                    handlers::rest::z_scan(State(state), Path(path), z_scan_dir).await
+                    handlers::rest::z_scan::record(State(state), Path(path), z_scan_dir).await
                 }
             }),
         )
@@ -178,7 +178,7 @@ async fn serve(options: ServeOptions) {
             delete({
                 let z_scan_dir = options.get_z_scan_dir().await;
                 move |State(state): State<AppState>, Path(uuid): Path<String>| async move {
-                    handlers::rest::delete_z_scan(State(state), Path(uuid), z_scan_dir).await
+                    handlers::rest::z_scan::delete(State(state), Path(uuid), z_scan_dir).await
                 }
             }),
         )
@@ -187,7 +187,7 @@ async fn serve(options: ServeOptions) {
             get({
                 let z_scan_dir = options.get_z_scan_dir().await;
                 move |State(state): State<AppState>| async move {
-                    handlers::rest::list_z_scans(State(state), z_scan_dir).await
+                    handlers::rest::z_scan::list(State(state), z_scan_dir).await
                 }
             }),
         )
@@ -195,7 +195,7 @@ async fn serve(options: ServeOptions) {
             get({
                 let z_scan_dir = options.get_z_scan_dir().await;
                 move |State(state): State<AppState>, Path(path): Path<(String, usize, u32)>| async move {
-                    handlers::rest::z_scan_thumbnail(State(state), Path(path), z_scan_dir).await
+                    handlers::rest::z_scan::thumbnail(State(state), Path(path), z_scan_dir).await
                 }
             }),
         )
