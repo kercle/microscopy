@@ -10,9 +10,11 @@ serve: serve-backend serve-frontend
 serve-backend:
     cargo run --bin control-app -- serve
 
+default_backend_host := "localhost:3000"
+
 [working-directory: "software/frontend"]
-serve-frontend:
-    npm run dev
+serve-frontend backend_host=default_backend_host:
+    MICROSCOPE_BACKEND_HOST="{{backend_host}}" npm run dev
 
 export PATH := "~/.cargo/bin:" + env_var('PATH')
 
