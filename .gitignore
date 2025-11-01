@@ -1,2 +1,4 @@
 target
 *.xcf
+.ipynb_checkpoints
+__pycache__

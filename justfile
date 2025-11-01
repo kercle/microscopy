@@ -33,3 +33,7 @@ flash:
 
 monitor device:
     cargo run --bin com-client -- --device {{device}} --baud 115200
+
+[working-directory: "exploration/microscopy"]
+explore:
+    uv run --with jupyter jupyter lab
