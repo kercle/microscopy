@@ -23,6 +23,7 @@ pub fn get_router(app_state: AppState) -> Router<AppState> {
             "/thumbnail/{:uuid}/{:frame_idx}/{:width}",
             routing::get(thumbnail),
         )
+        .route("/frame/{:uuid}/{:frame_idx}", routing::get(frame))
         .with_state(app_state)
 }
 
@@ -171,6 +172,32 @@ pub async fn delete(State(state): State<AppState>, Path(uuid): Path<String>) -> 
         Err(err) => json_response!(
             500,
             json_string!(&format!("Failed to delete z-scan: {err}"))
+        ),
+    }
+}
+
+pub async fn frame(
+    State(state): State<AppState>,
+    Path((uuid, frame_idx)): Path<(String, usize)>,
+) -> impl IntoResponse {
+    let frame_path = state
+        .config
+        .z_scan_dir
+        .join(&uuid)
+        .join(format!("frame-{:0>4}.jpg", frame_idx));
+
+    match tokio::fs::read(&frame_path).await {
+        Ok(frame_data) => Response::builder()
+            .status(200)
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .header("Content-Type", "image/jpeg")
+            .header("Content-Length", frame_data.len().to_string())
+            .body(Body::from(frame_data))
+            .unwrap(),
+        Err(err) => json_response!(
+            500,
+            json_string!(&format!("Failed to read z-scan frame: {err}"))
         ),
     }
 }
