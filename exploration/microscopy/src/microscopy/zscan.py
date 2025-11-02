@@ -1,5 +1,6 @@
 import io
 
+import numpy as np
 from PIL import Image
 
 
@@ -25,6 +26,17 @@ class ZScan:
         endpoint = f"/z-scan/thumbnail/{self.uuid}/{frame}/{size}"
         data = self.connection.get_bytes(endpoint)
         return Image.open(io.BytesIO(data))
+
+    def thumbails_as_array(self, size: int = 128) -> object:
+        data = np.array(self.thumbnail(0, size))
+        thumbnail_stack = np.empty((self.frame_count, *data.shape), dtype=data.dtype)
+        thumbnail_stack[0] = data
+
+        for frame in range(1, self.frame_count):
+            data = np.array(self.thumbnail(frame, size))
+            thumbnail_stack[frame] = data
+
+        return thumbnail_stack
 
 
 class ZScanRepository:
