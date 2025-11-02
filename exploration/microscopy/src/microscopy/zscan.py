@@ -22,6 +22,11 @@ class ZScan:
         self.frame_count = frame_count
         self.uuid = uuid
 
+    def frame(self, frame: int) -> bytes:
+        endpoint = f"/z-scan/frame/{self.uuid}/{frame}"
+        data = self.connection.get_bytes(endpoint)
+        return Image.open(io.BytesIO(data))
+
     def thumbnail(self, frame: int, size: int = 128) -> bytes:
         endpoint = f"/z-scan/thumbnail/{self.uuid}/{frame}/{size}"
         data = self.connection.get_bytes(endpoint)
