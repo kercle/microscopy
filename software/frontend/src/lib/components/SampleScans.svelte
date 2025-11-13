@@ -50,7 +50,13 @@
 	};
 
 	const updatePreviewImage = () => {
-		if (selectedIdx === null || frameSlider === undefined || previewImage === undefined) return;
+		if (
+			selectedIdx === null ||
+			frameSlider === undefined ||
+			previewImage === undefined ||
+			data[selectedIdx] === undefined
+		)
+			return;
 		previewImage.src = `${Z_SCAN_API_BASE}/thumbnail/${data[selectedIdx].uuid}/${frameSlider.value}/800`;
 	};
 
