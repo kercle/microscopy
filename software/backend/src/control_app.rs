@@ -62,7 +62,7 @@ impl AppState {
                 contrast=1.0
                 saturation=1.0"
         } else {
-            "videotestsrc name=source is-live=true pattern=smpte"
+            "videotestsrc name=source is-live=true pattern=gradient"
         };
 
         format!(
