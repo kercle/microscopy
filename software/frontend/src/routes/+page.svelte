@@ -11,6 +11,7 @@
 	import ZStageControls from '$lib/components/ZStageControls.svelte';
 	import type { State } from '$lib/state';
 	import SampleScans from '$lib/components/SampleScans.svelte';
+	import Processing from '$lib/icons/Processing.svelte';
 
 	let appState: State = $state({
 		ws: null,
@@ -53,7 +54,7 @@
 				<StreamMenu bind:appState />
 			</div>
 
-			<!-- Tab 3: Sample scans -->
+			<!-- Tab 2: Sample scans -->
 			<label class="tab">
 				<input type="radio" name="main-tabs" />
 				<Layers />
@@ -61,9 +62,20 @@
 			</label>
 			<div class="tab-content bg-base-100 p-6">
 				<SampleScans />
-			</div>	
+			</div>
 
-			<!-- Tab 2: Journal -->
+			<!-- Tab 3: Processing -->
+			<label class="tab">
+				<input type="radio" name="main-tabs" />
+				<Processing />
+				<span class="ml-2">Processing</span>
+			</label>
+			<div class="tab-content bg-base-100 p-6">
+				<p>TODO</p>
+			</div>
+
+
+			<!-- Tab 4: Journal -->
 			<label class="tab">
 				<input type="radio" name="main-tabs" />
 				<Journal />
