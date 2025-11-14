@@ -8,7 +8,7 @@ use serde_json::json;
 use tracing::{error, info};
 
 use crate::control_app::AppState;
-use interface::ws as ws_com;
+use interface::ws::WebSocketMessage;
 
 enum PeerRole {
     Unregistered,
@@ -33,7 +33,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
 }
 
 async fn process_text_message(text: &str, conn: &mut WsConnection) {
-    let msg = if let Ok(v) = serde_json::from_str::<ws_com::WebSocketMessage>(&text) {
+    let msg = if let Ok(v) = serde_json::from_str::<WebSocketMessage>(&text) {
         v
     } else {
         error!("Failed to parse JSON from text message");
@@ -41,11 +41,11 @@ async fn process_text_message(text: &str, conn: &mut WsConnection) {
     };
 
     match msg {
-        ws_com::WebSocketMessage::UpdateParameters(new_params) => {
+        WebSocketMessage::UpdateParameters(new_params) => {
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
         }
-        ws_com::WebSocketMessage::Logs(_) => {
+        WebSocketMessage::Logs(_) => {
             // logs from client are ignored
         }
         _ => {
@@ -90,7 +90,7 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
 
     let payload_json = {
         let params_guard = conn.app.parameters_controller.read().await;
-        let payload = ws_com::WebSocketMessage::UpdateParameters(params_guard.parameters.clone());
+        let payload = WebSocketMessage::UpdateParameters(params_guard.parameters.clone());
         serde_json::to_string(&payload).unwrap()
     };
 
@@ -123,7 +123,7 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
             Ok(_) = rx.changed() => {
                 let params = rx.borrow_and_update().clone();
 
-                let payload = ws_com::WebSocketMessage::UpdateParameters(params);
+                let payload = WebSocketMessage::UpdateParameters(params);
                 let payload_json = serde_json::to_string(&payload).unwrap();
                 conn.socket.send(ws::Message::Text(payload_json.into())).await?;
             }
