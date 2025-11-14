@@ -1,18 +1,15 @@
-use std::fmt::Display;
-
 use anyhow::Result;
 use bytes::Bytes;
-use glib::Value as GValue;
-use gstreamer::glib;
 use gstreamer::prelude::GObjectExtManualGst;
 use gstreamer::prelude::ToSendValue;
 use gstreamer::{self as gst, glib::object::ObjectExt};
 use gstreamer_app as gst_app;
 use gstreamer_video::{VideoFormat, VideoFrameRef, VideoInfo};
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::watch;
 use turbojpeg::{Compressor, Subsamp, YuvImage};
+
+use communication::ws as com_ws;
 
 pub const STREAM_WIDTH: u32 = 1440;
 pub const STREAM_HEIGHT: u32 = 810;
@@ -20,88 +17,13 @@ pub const STREAM_HEIGHT: u32 = 810;
 pub const PHOTO_WIDTH: u32 = 4056;
 pub const PHOTO_HEIGHT: u32 = 3040;
 
-#[serde_with::skip_serializing_none]
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub struct CameraProperties {
-    pub exposure_time: Option<u32>,
-    pub gain: Option<f64>,
-    pub brightness: Option<f32>,
-    pub contrast: Option<f32>,
-    pub saturation: Option<f32>,
-    pub sharpness: Option<i32>,
-    pub auto_white_balance: Option<bool>,
-    pub white_balance_mode: Option<WhiteBalanceMode>,
-    pub color_gain_red: Option<f32>,
-    pub color_gain_blue: Option<f32>,
-    pub test_pattern: Option<TestPattern>,
+pub trait CameraPropertiesExt {
+    fn write_to_source(&self, source: &gst::Element);
+    fn patch(&mut self, other: &Self) -> usize;
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum WhiteBalanceMode {
-    Auto = 0,
-    Incandescent = 1,
-    Tungsten = 2,
-    Fluorescent = 3,
-    Indoor = 4,
-    Daylight = 5,
-    Cloudy = 6,
-    Custom = 7,
-}
-
-impl Display for WhiteBalanceMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WhiteBalanceMode::Auto => write!(f, "auto"),
-            WhiteBalanceMode::Incandescent => write!(f, "incandescent"),
-            WhiteBalanceMode::Tungsten => write!(f, "tungsten"),
-            WhiteBalanceMode::Fluorescent => write!(f, "fluorescent"),
-            WhiteBalanceMode::Indoor => write!(f, "indoor"),
-            WhiteBalanceMode::Daylight => write!(f, "daylight"),
-            WhiteBalanceMode::Cloudy => write!(f, "cloudy"),
-            WhiteBalanceMode::Custom => write!(f, "custom"),
-        }
-    }
-}
-
-#[derive(Clone, Deserialize, Serialize, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum TestPattern {
-    Smpte = 0,
-    Snow = 1,
-    Ball = 18,
-}
-
-impl From<i32> for TestPattern {
-    fn from(value: i32) -> Self {
-        match value {
-            0 => TestPattern::Smpte,
-            1 => TestPattern::Snow,
-            18 => TestPattern::Ball,
-            _ => unimplemented!("Unsupported test pattern value {value}"),
-        }
-    }
-}
-
-impl From<TestPattern> for GValue {
-    fn from(val: TestPattern) -> Self {
-        GValue::from(val as i32)
-    }
-}
-
-impl Display for TestPattern {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TestPattern::Smpte => write!(f, "smpte"),
-            TestPattern::Snow => write!(f, "snow"),
-            TestPattern::Ball => write!(f, "ball"),
-        }
-    }
-}
-
-impl CameraProperties {
-    pub fn write_to_source(&self, source: &gst::Element) {
+impl CameraPropertiesExt for com_ws::parameters::CameraProperties {
+    fn write_to_source(&self, source: &gst::Element) {
         if let Some(v) = self.exposure_time
             && source.has_property("exposure-time")
         {
@@ -145,7 +67,7 @@ impl CameraProperties {
         }
     }
 
-    pub fn patch(&mut self, other: &Self) -> usize {
+    fn patch(&mut self, other: &Self) -> usize {
         let mut changes = 0;
 
         if let Some(v) = other.exposure_time

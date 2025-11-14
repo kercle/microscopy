@@ -1,3 +1,7 @@
+export PATH := "~/.cargo/bin:" + env_var('PATH')
+
+default_backend_host := "localhost:3000"
+
 deploy target_host:
     cross build --release --bin control-app --target "aarch64-unknown-linux-gnu"
     curl -X POST "http://{{target_host}}:3000/api/update/self" \
@@ -10,13 +14,9 @@ serve: serve-backend serve-frontend
 serve-backend:
     cargo run --bin control-app -- serve
 
-default_backend_host := "localhost:3000"
-
 [working-directory: "software/frontend"]
-serve-frontend backend_host=default_backend_host:
+serve-frontend backend_host=default_backend_host: export-bindings
     MICROSCOPE_BACKEND_HOST="{{backend_host}}" npm run dev
-
-export PATH := "~/.cargo/bin:" + env_var('PATH')
 
 [working-directory: "software/firmware"]
 build-firmware:
@@ -37,3 +37,7 @@ monitor device:
 [working-directory: "exploration/microscopy"]
 explore:
     uv run --with jupyter jupyter lab
+
+[working-directory: "software/communication"]
+export-bindings:
+    TS_RS_EXPORT_DIR="../frontend/src/lib/bindings" cargo test export_bindings

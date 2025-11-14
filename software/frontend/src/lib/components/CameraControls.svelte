@@ -1,23 +1,15 @@
 <script lang="ts">
 	import SliderWithTextbox from '$lib/components/SliderWithTextbox.svelte';
 	import type { State } from '$lib/state';
+	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
+	import type { CameraProperties } from '$lib/bindings/CameraProperties';
 
 	let { appState = $bindable<State>() } = $props();
-
-	type CameraProperties = {
-		exposure_time?: number;
-		brightness?: number;
-		contrast?: number;
-		saturation?: number;
-		auto_white_balance?: boolean;
-		white_balance_mode?: string;
-		color_gain_red?: number;
-		color_gain_blue?: number;
-	};
 
 	let camera_properties: CameraProperties = $state({});
 
 	export const update = (data: any) => {
+		console.log('CameraControls update', data);
 		if (data.camera_properties) {
 			camera_properties = { ...camera_properties, ...data.camera_properties };
 		}
@@ -31,11 +23,14 @@
 			return;
 		}
 
-		appState.ws.send(
-			JSON.stringify({
+		let payload: WebSocketMessage = {
+			update_parameters: {
 				camera_properties: { [t]: v }
-			})
-		);
+			}
+		};
+
+		console.log('Sending payload', payload);
+		appState.ws.send(JSON.stringify(payload));
 	};
 
 	const updateParam = (value: any, param: string) => {
@@ -44,14 +39,15 @@
 		if (debounce_timeout) {
 			clearTimeout(debounce_timeout);
 		}
+
 		debounce_timeout = setTimeout(() => sendCameraProperty(param, value), 50);
 	};
 </script>
 
-<div class="bg-base-100 border-base-300 collapse collapse-arrow border p-2">
+<div class="bg-base-100 border-base-300 collapse-arrow collapse border p-2">
 	<input type="checkbox" />
-	<div class="collapse-title font-semibold text-lg">Camera Controls</div>
-	<div class="collapse-content text-sm flex flex-col gap-1">
+	<div class="collapse-title text-lg font-semibold">Camera Controls</div>
+	<div class="collapse-content flex flex-col gap-1 text-sm">
 		<SliderWithTextbox
 			label="Exposure Time"
 			unit="µs"

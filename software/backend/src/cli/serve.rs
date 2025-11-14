@@ -13,8 +13,9 @@ use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use communication::uart::driver::DeviceDriver;
+use communication::ws as com_ws;
 
-use crate::camera;
+use crate::camera::{self, CameraPropertiesExt};
 use crate::control_app::AppState;
 use crate::handlers;
 use crate::parameters::ParametersController;
@@ -80,7 +81,7 @@ async fn device_monitor(app_state: AppState) -> Result<()> {
 
 async fn camera_properties_update_loop(
     app_state: AppState,
-    mut state_notify: tokio::sync::watch::Receiver<crate::parameters::Parameters>,
+    mut state_notify: tokio::sync::watch::Receiver<com_ws::parameters::Parameters>,
 ) {
     loop {
         tokio::select! {

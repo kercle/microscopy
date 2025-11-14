@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[cfg(feature = "std")]
-extern crate std;
-
-#[cfg(feature = "std")]
 mod parse;
 #[cfg(feature = "host")]
 pub mod driver;

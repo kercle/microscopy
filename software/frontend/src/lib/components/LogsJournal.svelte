@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { LogMessage } from '$lib';
+	import type { LogEntry } from "$lib/bindings/LogEntry";
 
-	let log_messages: LogMessage[] = $state([]);
+	let log_messages: LogEntry[] = $state([]);
 
-	export const addLogMessages = (new_logs: LogMessage[]) => {
+	export const addLogMessages = (new_logs: LogEntry[]) => {
 		log_messages = [...log_messages, ...new_logs];
 
 		if (log_messages.length > 200) {

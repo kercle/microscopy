@@ -1,16 +1,18 @@
-use crate::camera::CameraProperties;
-use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Parameters {
-    pub camera_properties: CameraProperties,
+use communication::ws as com_ws;
+
+use crate::camera::CameraPropertiesExt;
+
+trait ParametersExt {
+    fn new() -> Self;
+    fn patch(&mut self, other: &Self) -> usize;
 }
 
-impl Parameters {
-    pub fn new() -> Self {
-        Parameters {
-            camera_properties: CameraProperties {
+impl ParametersExt for com_ws::parameters::Parameters {
+    fn new() -> Self {
+        Self {
+            camera_properties: com_ws::parameters::CameraProperties {
                 exposure_time: Some(4000),
                 gain: Some(1.0),
                 brightness: Some(0.0),
@@ -18,7 +20,7 @@ impl Parameters {
                 saturation: Some(1.0),
                 sharpness: Some(0),
                 auto_white_balance: Some(true),
-                white_balance_mode: Some(crate::camera::WhiteBalanceMode::Auto),
+                white_balance_mode: Some(com_ws::parameters::WhiteBalanceMode::Auto),
                 color_gain_red: Some(1.0),
                 color_gain_blue: Some(1.0),
                 test_pattern: None,
@@ -32,25 +34,25 @@ impl Parameters {
 }
 
 pub struct ParametersController {
-    pub parameters: Parameters,
-    notify_channel: watch::Sender<Parameters>,
+    pub parameters: com_ws::parameters::Parameters,
+    notify_channel: watch::Sender<com_ws::parameters::Parameters>,
 }
 
 impl ParametersController {
     pub fn new() -> Self {
-        let (notify_channel, _) = watch::channel(Parameters::new());
+        let (notify_channel, _) = watch::channel(com_ws::parameters::Parameters::new());
 
         ParametersController {
-            parameters: Parameters::new(),
+            parameters: com_ws::parameters::Parameters::new(),
             notify_channel,
         }
     }
 
-    pub fn subscribe_changes(&self) -> watch::Receiver<Parameters> {
+    pub fn subscribe_changes(&self) -> watch::Receiver<com_ws::parameters::Parameters> {
         self.notify_channel.subscribe()
     }
 
-    pub fn patch(&mut self, other: &Parameters) {
+    pub fn patch(&mut self, other: &com_ws::parameters::Parameters) {
         let changes = self.parameters.patch(other);
 
         if changes > 0 {

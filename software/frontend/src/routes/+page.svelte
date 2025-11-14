@@ -12,6 +12,7 @@
 	import type { State } from '$lib/state';
 	import SampleScans from '$lib/components/SampleScans.svelte';
 	import Processing from '$lib/icons/Processing.svelte';
+	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
 
 	let appState: State = $state({
 		ws: null,
@@ -23,11 +24,12 @@
 
 	$effect(() => {
 		appState.ws = connect((event: MessageEvent) => {
-			let data = JSON.parse(event.data);
+			let msg: WebSocketMessage = JSON.parse(event.data);
 
-			camera_controls_ref.update(data);
-			if (data.logs) {
-				logs_journal_ref.addLogMessages(data.logs);
+			if ("logs" in msg) {
+				logs_journal_ref.addLogMessages(msg.logs);
+			} else if ("update_parameters" in msg) {
+				camera_controls_ref.update(msg.update_parameters);
 			}
 		});
 		return () => appState.ws?.close();
