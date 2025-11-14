@@ -16,7 +16,7 @@ use interface::ws::parameters::Parameters;
 enum PeerRole {
     Unregistered,
     UserClient,
-    ComputeNode,
+    ComputeNode(String),
 }
 
 struct Receivers {
@@ -66,15 +66,21 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
                 .send(ws::Message::Text(msg.unwrap().into()))
                 .await?;
         }
+        WebSocketMessage::RegisterComputeNode(capabilities) => {
+            let node_id = conn.app.register_compute_node(&capabilities).await;
+
+            conn.role = PeerRole::ComputeNode(node_id.clone());
+            info!(
+                "WebSocket client registered as ComputeNode with ID {}",
+                node_id
+            );
+        }
         WebSocketMessage::UpdateParameters(new_params) => {
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
         }
         WebSocketMessage::Logs(_) => {
             // logs from client are ignored
-        }
-        _ => {
-            error!("Unsupported WebSocket message type received");
         }
     }
 
@@ -158,6 +164,13 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                 };
             }
         }
+    }
+
+    if let PeerRole::ComputeNode(node_id) = &conn.role {
+        conn.app.unregister_compute_node(node_id).await;
+        info!("ComputeNode {} disconnected and unregistered", node_id);
+    } else {
+        info!("WebSocket client disconnected");
     }
 
     Ok(())

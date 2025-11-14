@@ -10,8 +10,8 @@ use {
 };
 
 pub mod compute_node;
-pub mod parameters;
 pub mod logs;
+pub mod parameters;
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
@@ -19,8 +19,9 @@ pub mod logs;
 #[serde(rename_all = "snake_case")]
 pub enum WebSocketMessage {
     RegisterUserClient,
-    UpdateParameters(parameters::Parameters),
-    Logs(Vec<logs::LogEntry>),
     RegisterComputeNode(compute_node::ComputeNodeCapabilities),
-    AnnounceComputeNode(compute_node::ComputeNodeAnnouncement),
+
+    UpdateParameters(parameters::Parameters),
+
+    Logs(Vec<logs::LogEntry>),
 }

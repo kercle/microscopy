@@ -8,7 +8,7 @@ use axum::{Router, routing::get, routing::patch, routing::post};
 use bytes::Bytes;
 use clap::Parser;
 use interface::uart::DeviceEvent;
-use tokio::sync::watch;
+use tokio::sync::{RwLock, watch};
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -155,7 +155,8 @@ impl Command {
         let state_notify = parameters_controller.subscribe_changes();
 
         let (frame_tx, frame_rx) = watch::channel::<Arc<Bytes>>(Arc::new(Bytes::new()));
-        let logs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+        let logs = Arc::new(RwLock::new(Vec::new()));
+        let compute_nodes = Arc::new(RwLock::new(std::collections::HashMap::new()));
         let device_driver = if let Ok(device_driver) =
             DeviceDriver::new(&PathBuf::from("/dev/ttyMicroscopeController"), 115200)
         {
@@ -168,9 +169,16 @@ impl Command {
         let config = crate::control_app::Config {
             z_scan_dir: self.get_z_scan_dir().await,
         };
-        let app_state = AppState::new(frame_rx, logs, device_driver, parameters_controller, config)
-            .await
-            .unwrap();
+        let app_state = AppState::new(
+            frame_rx,
+            logs,
+            device_driver,
+            parameters_controller,
+            config,
+            compute_nodes,
+        )
+        .await
+        .unwrap();
 
         init_tracing(&app_state);
         info!("Starting control-app backend");

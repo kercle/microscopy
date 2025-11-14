@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
-use interface::uart::driver::DeviceDriver;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
+use interface::ws::compute_node::ComputeNodeCapabilities;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
@@ -12,8 +14,8 @@ use tracing::{info, warn};
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
 use crate::parameters::ParametersController;
-use interface::ws as com_ws;
-use interface::ws::logs::LogEntry;
+use interface::uart::driver::DeviceDriver;
+use interface::ws::{logs::LogEntry, parameters::Parameters};
 
 const MAX_LOG_ENTRIES: usize = 200;
 
@@ -49,6 +51,8 @@ pub struct AppState {
     pub parameters_controller: Arc<RwLock<ParametersController>>,
 
     pub config: Config,
+
+    compute_nodes: Arc<RwLock<HashMap<String, ComputeNodeCapabilities>>>,
 }
 
 impl AppState {
@@ -73,11 +77,7 @@ impl AppState {
         )
     }
 
-    fn photo_pipeline_string(
-        width: u32,
-        height: u32,
-        parameters: &com_ws::parameters::Parameters,
-    ) -> String {
+    fn photo_pipeline_string(width: u32, height: u32, parameters: &Parameters) -> String {
         let source_element = if cfg!(target_arch = "aarch64") {
             #[allow(unused_variables)]
             let exposure_time = parameters.camera_properties.exposure_time.unwrap_or(4000);
@@ -127,6 +127,7 @@ impl AppState {
         device_driver: Option<Arc<Mutex<DeviceDriver>>>,
         parameters: ParametersController,
         config: Config,
+        compute_nodes: Arc<RwLock<HashMap<String, ComputeNodeCapabilities>>>,
     ) -> Result<AppState> {
         let (app_event_tx, _app_event_rx) = broadcast::channel(MAX_LOG_ENTRIES);
 
@@ -140,6 +141,7 @@ impl AppState {
             parameters_controller: Arc::new(RwLock::new(parameters)),
             device_driver,
             config,
+            compute_nodes,
         };
 
         app_state.set_awb_enable(true);
@@ -224,10 +226,7 @@ impl AppState {
         self.app_event_tx.subscribe()
     }
 
-    async fn start_photo_pipeline(
-        &self,
-        parameters: &com_ws::parameters::Parameters,
-    ) -> Result<gst::Pipeline> {
+    async fn start_photo_pipeline(&self, parameters: &Parameters) -> Result<gst::Pipeline> {
         self.stop_pipeline()?;
 
         let pipeline_string =
@@ -265,6 +264,32 @@ impl AppState {
 
         Ok(Bytes::copy_from_slice(map.as_slice()))
     }
+
+    pub async fn register_compute_node(&self, capabilities: &ComputeNodeCapabilities) -> String {
+        let node_id = uuid::Uuid::new_v4().to_string();
+
+        let compute_node_list = {
+            let mut compute_nodes = self.compute_nodes.write().await;
+            compute_nodes.insert(node_id.clone(), capabilities.clone());
+            compute_nodes.keys().cloned().collect()
+        };
+
+        let msg = AppStateEvent::ComputeNoteUpdate(compute_node_list);
+        let _ = self.app_event_tx.send(msg);
+
+        node_id
+    }
+
+    pub async fn unregister_compute_node(&self, node_id: &str) {
+        let compute_node_list = {
+            let mut compute_nodes = self.compute_nodes.write().await;
+            compute_nodes.remove(node_id);
+            compute_nodes.keys().cloned().collect()
+        };
+
+        let msg = AppStateEvent::ComputeNoteUpdate(compute_node_list);
+        let _ = self.app_event_tx.send(msg);
+    }
 }
 
 impl<'a> AppStateGuard<'a> {
@@ -276,7 +301,7 @@ impl<'a> AppStateGuard<'a> {
         self.state.play_pipeline()
     }
 
-    pub async fn take_photo(&self, parameters: &com_ws::parameters::Parameters) -> Result<Bytes> {
+    pub async fn take_photo(&self, parameters: &Parameters) -> Result<Bytes> {
         let photo_pipeline = self.state.start_photo_pipeline(parameters).await?;
         let appsink = photo_pipeline
             .by_name("sink")
@@ -348,7 +373,7 @@ impl<'a> AppStateGuard<'a> {
 
     pub async fn z_scan(
         &self,
-        parameters: &com_ws::parameters::Parameters,
+        parameters: &Parameters,
         relative_start_pos: i32,
         relative_stop_pos: i32,
         delta_steps: u32,
