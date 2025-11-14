@@ -18,27 +18,21 @@ enum PeerRole {
 
 struct WsConnection {
     role: PeerRole,
-    socket: WebSocket,
     app: AppState,
+    socket: WebSocket,
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
     info!("New WebSocket connection");
 
     ws.on_upgrade(async move |socket| {
-        let connection = WsConnection {
-            role: PeerRole::Unregistered,
-            socket,
-            app: app.clone(),
-        };
-
-        if let Err(err) = handle_socket(connection).await {
+        if let Err(err) = handle_socket(socket, app).await {
             eprintln!("Error handling WebSocket: {}", err);
         }
     })
 }
 
-async fn process_message(msg: ws::Message, app: &AppState) {
+async fn process_message(msg: ws::Message, conn: &mut WsConnection) {
     match msg {
         ws::Message::Text(text) => {
             let msg = if let Ok(v) = serde_json::from_str::<ws_com::WebSocketMessage>(&text) {
@@ -50,7 +44,7 @@ async fn process_message(msg: ws::Message, app: &AppState) {
 
             match msg {
                 ws_com::WebSocketMessage::UpdateParameters(new_params) => {
-                    let mut p = app.parameters_controller.write().await;
+                    let mut p = conn.app.parameters_controller.write().await;
                     p.patch(&new_params);
                 }
                 ws_com::WebSocketMessage::Logs(_) => {
@@ -82,7 +76,13 @@ async fn process_message(msg: ws::Message, app: &AppState) {
     }
 }
 
-async fn handle_socket(mut conn: WsConnection) -> Result<()> {
+async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
+    let mut conn = WsConnection {
+        role: PeerRole::Unregistered,
+        app: app.clone(),
+        socket,
+    };
+
     let mut rx = {
         let p = conn.app.parameters_controller.read().await;
         p.subscribe_changes()
@@ -113,7 +113,7 @@ async fn handle_socket(mut conn: WsConnection) -> Result<()> {
             msg = conn.socket.recv() => {
                 match msg {
                     Some(Ok(msg)) => {
-                        process_message(msg, &conn.app).await;
+                        process_message(msg, &mut conn).await;
                     }
                     Some(Err(err)) => {
                         eprintln!("WebSocket error: {}", err);
