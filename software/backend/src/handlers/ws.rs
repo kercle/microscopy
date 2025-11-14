@@ -10,7 +10,14 @@ use tracing::{error, info};
 use crate::control_app::AppState;
 use interface::ws as ws_com;
 
+enum PeerRole {
+    Unregistered,
+    UserClient,
+    ComputeNode,
+}
+
 struct WsConnection {
+    role: PeerRole,
     socket: WebSocket,
     app: AppState,
 }
@@ -20,6 +27,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
 
     ws.on_upgrade(async move |socket| {
         let connection = WsConnection {
+            role: PeerRole::Unregistered,
             socket,
             app: app.clone(),
         };
