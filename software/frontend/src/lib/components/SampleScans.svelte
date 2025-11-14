@@ -55,8 +55,9 @@
 			frameSlider === undefined ||
 			previewImage === undefined ||
 			data[selectedIdx] === undefined
-		)
+		) {
 			return;
+		}
 		previewImage.src = `${Z_SCAN_API_BASE}/thumbnail/${data[selectedIdx].uuid}/${frameSlider.value}/800`;
 	};
 
@@ -182,7 +183,7 @@
 				<img
 					bind:this={previewImage}
 					src="{Z_SCAN_API_BASE}/thumbnail/{data[selectedIdx].uuid}/0/800"
-					alt="Preview"
+					alt="{Z_SCAN_API_BASE}/thumbnail/{data[selectedIdx].uuid}/0/800"
 					class="w-full rounded-md"
 					draggable="false"
 				/>
