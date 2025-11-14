@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
-use communication::uart::driver::DeviceDriver;
+use interface::uart::driver::DeviceDriver;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
@@ -12,8 +12,8 @@ use tracing::{info, warn};
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
 use crate::parameters::ParametersController;
-use communication::ws as com_ws;
-use communication::ws::logs::LogEntry;
+use interface::ws as com_ws;
+use interface::ws::logs::LogEntry;
 
 const MAX_LOG_ENTRIES: usize = 200;
 

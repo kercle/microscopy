@@ -2,7 +2,7 @@ use std::{path::Path, process::Command};
 
 fn main() {
     let frontend_dir = Path::new("../frontend");
-    let communication_dir = Path::new("../communication");
+    let interface_dir = Path::new("../interface");
 
     let profile = std::env::var("PROFILE").unwrap();
 
@@ -16,7 +16,7 @@ fn main() {
                 "TS_RS_EXPORT_DIR",
                 format!("{}/src/lib/bindings", frontend_dir.display()),
             )
-            .current_dir(communication_dir)
+            .current_dir(interface_dir)
             .status()
             .expect("failed to run cargo test export_bindings");
     

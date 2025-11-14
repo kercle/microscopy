@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::{body::Body, response::IntoResponse};
 use bytes::Bytes;
-use communication::uart::{HostCommand, StageMotorCmd};
+use interface::uart::{HostCommand, StageMotorCmd};
 use http::Response;
 use serde::Deserialize;
 use tracing::{error, info, warn};

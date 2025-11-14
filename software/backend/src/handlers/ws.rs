@@ -8,7 +8,7 @@ use serde_json::json;
 use tracing::{error, info};
 
 use crate::control_app::AppState;
-use communication::ws as ws_com;
+use interface::ws as ws_com;
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
     info!("New WebSocket connection");

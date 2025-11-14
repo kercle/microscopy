@@ -7,13 +7,13 @@ use axum::extract::{DefaultBodyLimit, Path};
 use axum::{Router, routing::get, routing::patch, routing::post};
 use bytes::Bytes;
 use clap::Parser;
-use communication::uart::DeviceEvent;
+use interface::uart::DeviceEvent;
 use tokio::sync::watch;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-use communication::uart::driver::DeviceDriver;
-use communication::ws as com_ws;
+use interface::uart::driver::DeviceDriver;
+use interface::ws as com_ws;
 
 use crate::camera::{self, CameraPropertiesExt};
 use crate::control_app::AppState;
@@ -61,13 +61,13 @@ async fn device_monitor(app_state: AppState) -> Result<()> {
         if let Some(event) = driver.lock().await.recv_event::<String>()? {
             match event {
                 DeviceEvent::LogMessage { level, message } => match level {
-                    communication::uart::LogMessageLevel::Info => {
+                    interface::uart::LogMessageLevel::Info => {
                         info!("Controller board log: {message}");
                     }
-                    communication::uart::LogMessageLevel::Warning => {
+                    interface::uart::LogMessageLevel::Warning => {
                         warn!("Controller board log: {message}");
                     }
-                    communication::uart::LogMessageLevel::Error => {
+                    interface::uart::LogMessageLevel::Error => {
                         error!("Controller board log: {message}");
                     }
                 },

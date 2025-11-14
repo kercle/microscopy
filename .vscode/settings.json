@@ -5,7 +5,7 @@
     ],
     "rust-analyzer.linkedProjects": [
         "./software/backend/Cargo.toml",
-        "./software/communication/Cargo.toml",
+        "./software/interface/Cargo.toml",
         {
             "manifest": "./software/firmware/Cargo.toml",
             "target": "xtensa-esp32-none-elf"

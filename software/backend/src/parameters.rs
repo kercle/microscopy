@@ -1,6 +1,6 @@
 use tokio::sync::watch;
 
-use communication::ws as com_ws;
+use interface::ws as com_ws;
 
 use crate::camera::CameraPropertiesExt;
 

@@ -5,7 +5,7 @@ use embassy_sync::{
 
 use heapless::String;
 
-pub type DeviceEvent = communication::uart::DeviceEvent<String<128>>;
+pub type DeviceEvent = interface::uart::DeviceEvent<String<128>>;
 
 pub struct Channels {
     pub device_events: Channel<CriticalSectionRawMutex, DeviceEvent, 16>,
@@ -32,21 +32,21 @@ pub fn send_device_event(event: DeviceEvent) {
 
 pub fn send_info(message: &str) {
     send_device_event(DeviceEvent::LogMessage {
-        level: communication::uart::LogMessageLevel::Info,
+        level: interface::uart::LogMessageLevel::Info,
         message: String::try_from(message).unwrap(),
     });
 }
 
 pub fn send_warning(message: &str) {
     send_device_event(DeviceEvent::LogMessage {
-        level: communication::uart::LogMessageLevel::Warning,
+        level: interface::uart::LogMessageLevel::Warning,
         message: String::try_from(message).unwrap(),
     });
 }
 
 pub fn send_error(message: &str) {
     send_device_event(DeviceEvent::LogMessage {
-        level: communication::uart::LogMessageLevel::Error,
+        level: interface::uart::LogMessageLevel::Error,
         message: String::try_from(message).unwrap(),
     });
 }

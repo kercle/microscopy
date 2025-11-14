@@ -561,24 +561,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
-name = "communication"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "cobs 0.4.0",
- "postcard",
- "ratatui",
- "regex",
- "serde",
- "serde_with",
- "serialport",
- "tokio",
- "tokio-util",
- "ts-rs",
-]
-
-[[package]]
 name = "compact_str"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,12 +583,12 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
- "communication",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
  "http",
  "image",
+ "interface",
  "mime_guess",
  "rust-embed",
  "self-replace",
@@ -1457,7 +1439,6 @@ checksum = "7fd99930f64d146689264c637b5af2f0233a933bef0d8570e2526bf9e083192d"
 name = "firmware"
 version = "0.1.0"
 dependencies = [
- "communication",
  "critical-section",
  "embassy-executor",
  "embassy-sync 0.7.2",
@@ -1467,6 +1448,7 @@ dependencies = [
  "esp-hal",
  "esp-hal-embassy",
  "heapless 0.9.1",
+ "interface",
  "static_cell",
 ]
 
@@ -2105,6 +2087,24 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "interface"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cobs 0.4.0",
+ "postcard",
+ "ratatui",
+ "regex",
+ "serde",
+ "serde_with",
+ "serialport",
+ "tokio",
+ "tokio-util",
+ "ts-rs",
 ]
 
 [[package]]

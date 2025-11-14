@@ -18,7 +18,7 @@ embassy-time = "0.4.0"
 esp-alloc = "0.8.0"
 esp-hal-embassy = { version = "0.9.0", features = ["esp32"] }
 static_cell = "2.1.1"
-communication = { path = "../communication", default-features = false }
+interface = { path = "../interface", default-features = false }
 embassy-sync = "0.7.2"
 heapless = { version = "0.9.1", features = ["serde"] }
 
