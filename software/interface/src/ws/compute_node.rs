@@ -5,28 +5,40 @@ use std::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "ts")]
-use {std::borrow::ToOwned, std::format, std::string::ToString, ts_rs::TS};
+use {std::format, std::string::ToString, ts_rs::TS};
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
 enum Input {
-    Selection(Vec<String>),
+    Selection {
+        display_name: String,
+        options: Vec<String>,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
 enum Output {
-    Image,
+    Image { display_name: String },
+}
+
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Procedure {
+    display_name: String,
+    description: String,
+    inputs: HashMap<String, Input>,
+    outputs: HashMap<String, Output>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ComputeNodeCapabilities {
-    inputs: HashMap<String, Input>,
-    outputs: HashMap<String, Output>,
+    pub procedures: HashMap<String, Procedure>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
