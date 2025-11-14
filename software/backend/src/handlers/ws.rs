@@ -5,21 +5,31 @@ use axum::{
     extract::ws::{self, WebSocket, WebSocketUpgrade},
 };
 use serde_json::json;
+use tokio::sync::{broadcast, watch};
 use tracing::{error, info};
 
-use crate::control_app::AppState;
+use crate::control_app::{AppState, AppStateEvent};
 use interface::ws::WebSocketMessage;
+use interface::ws::parameters::Parameters;
 
+#[derive(PartialEq)]
 enum PeerRole {
     Unregistered,
     UserClient,
     ComputeNode,
 }
 
+struct Receivers {
+    app_events: broadcast::Receiver<AppStateEvent>,
+    params: watch::Receiver<Parameters>,
+}
+
 struct WsConnection {
     role: PeerRole,
     app: AppState,
     socket: WebSocket,
+
+    receivers: Receivers,
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
@@ -32,8 +42,30 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
     })
 }
 
-async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) {
+async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) -> Result<()> {
     match msg {
+        WebSocketMessage::RegisterUserClient => {
+            conn.role = PeerRole::UserClient;
+            info!("WebSocket client registered as UserClient");
+
+            let payload_json = {
+                let params_guard = conn.app.parameters_controller.read().await;
+                let payload = WebSocketMessage::UpdateParameters(params_guard.parameters.clone());
+                serde_json::to_string(&payload).unwrap()
+            };
+
+            conn.socket
+                .send(ws::Message::Text(payload_json.into()))
+                .await?;
+
+            let msg = serde_json::to_string(&json!({
+                "logs": conn.app.get_logs().await
+            }));
+
+            conn.socket
+                .send(ws::Message::Text(msg.unwrap().into()))
+                .await?;
+        }
         WebSocketMessage::UpdateParameters(new_params) => {
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
@@ -45,19 +77,21 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             error!("Unsupported WebSocket message type received");
         }
     }
+
+    Ok(())
 }
 
-async fn process_message(msg: ws::Message, conn: &mut WsConnection) {
+async fn process_message(msg: ws::Message, conn: &mut WsConnection) -> Result<()> {
     match msg {
         ws::Message::Text(text) => {
             let msg = if let Ok(v) = serde_json::from_str::<WebSocketMessage>(&text) {
                 v
             } else {
                 error!("Failed to parse JSON from text message");
-                return;
+                return Ok(());
             };
 
-            process_parsed_message(msg, conn).await;
+            process_parsed_message(msg, conn).await?;
         }
         ws::Message::Binary(_bin) => {
             // Handle binary message
@@ -72,6 +106,8 @@ async fn process_message(msg: ws::Message, conn: &mut WsConnection) {
             // Handle pong
         }
     }
+
+    Ok(())
 }
 
 async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
@@ -79,39 +115,21 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
         role: PeerRole::Unregistered,
         app: app.clone(),
         socket,
+        receivers: Receivers {
+            app_events: app.subscribe_to_app_events().await,
+            params: {
+                let p = app.parameters_controller.read().await;
+                p.subscribe_changes()
+            },
+        },
     };
-
-    let mut rx = {
-        let p = conn.app.parameters_controller.read().await;
-        p.subscribe_changes()
-    };
-
-    let mut log_rx = conn.app.subscribe_to_logs().await;
-
-    let payload_json = {
-        let params_guard = conn.app.parameters_controller.read().await;
-        let payload = WebSocketMessage::UpdateParameters(params_guard.parameters.clone());
-        serde_json::to_string(&payload).unwrap()
-    };
-
-    conn.socket
-        .send(ws::Message::Text(payload_json.into()))
-        .await?;
-
-    let msg = serde_json::to_string(&json!({
-        "logs": conn.app.get_logs().await
-    }));
-
-    conn.socket
-        .send(ws::Message::Text(msg.unwrap().into()))
-        .await?;
 
     loop {
         tokio::select! {
             msg = conn.socket.recv() => {
                 match msg {
                     Some(Ok(msg)) => {
-                        process_message(msg, &mut conn).await;
+                        process_message(msg, &mut conn).await?;
                     }
                     Some(Err(err)) => {
                         eprintln!("WebSocket error: {}", err);
@@ -120,19 +138,24 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                     None => break, // Connection closed
                 }
             }
-            Ok(_) = rx.changed() => {
-                let params = rx.borrow_and_update().clone();
+            Ok(_) = conn.receivers.params.changed(), if conn.role == PeerRole::UserClient => {
+                let params = conn.receivers.params.borrow_and_update().clone();
 
                 let payload = WebSocketMessage::UpdateParameters(params);
                 let payload_json = serde_json::to_string(&payload).unwrap();
                 conn.socket.send(ws::Message::Text(payload_json.into())).await?;
             }
-            Ok(log_msg) = log_rx.recv() => {
-                let msg = serde_json::to_string(&json!({
-                    "logs": [log_msg]
-                }));
-
-                conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
+            Ok(event) = conn.receivers.app_events.recv(), if conn.role == PeerRole::UserClient => {
+                match event {
+                    AppStateEvent::Log(log_msg) => {
+                        let payload = WebSocketMessage::Logs(vec![log_msg]);
+                        let msg = serde_json::to_string(&payload);
+                        conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
+                    }
+                    AppStateEvent::ComputeNoteUpdate(_node_list) => {
+                        // TODO
+                    }
+                };
             }
         }
     }

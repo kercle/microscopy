@@ -28,9 +28,15 @@ pub struct AppStateGuard<'a> {
 }
 
 #[derive(Clone)]
+pub enum AppStateEvent {
+    Log(LogEntry),
+    ComputeNoteUpdate(Vec<String>),
+}
+
+#[derive(Clone)]
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
-    logs_tx: broadcast::Sender<LogEntry>,
+    app_event_tx: broadcast::Sender<AppStateEvent>,
 
     operation_semaphore: Arc<Semaphore>,
     operation_cancel_token: Arc<RwLock<CancellationToken>>,
@@ -122,11 +128,11 @@ impl AppState {
         parameters: ParametersController,
         config: Config,
     ) -> Result<AppState> {
-        let (logs_tx, _logs_rx) = broadcast::channel(MAX_LOG_ENTRIES);
+        let (app_event_tx, _app_event_rx) = broadcast::channel(MAX_LOG_ENTRIES);
 
         let app_state = AppState {
             frame_rx,
-            logs_tx,
+            app_event_tx,
             operation_cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
             operation_semaphore: Arc::new(Semaphore::new(1)),
             logs,
@@ -214,8 +220,8 @@ impl AppState {
         Vec::from_iter(l.iter().cloned())
     }
 
-    pub async fn subscribe_to_logs(&self) -> broadcast::Receiver<LogEntry> {
-        self.logs_tx.subscribe()
+    pub async fn subscribe_to_app_events(&self) -> broadcast::Receiver<AppStateEvent> {
+        self.app_event_tx.subscribe()
     }
 
     async fn start_photo_pipeline(
@@ -403,7 +409,7 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for AppState {
         let message = event_fields.message.unwrap_or_default();
 
         let logs = self.logs.clone();
-        let logs_tx = self.logs_tx.clone();
+        let app_event_tx = self.app_event_tx.clone();
 
         let logs_entry = LogEntry {
             timestamp,
@@ -411,7 +417,7 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for AppState {
             message,
         };
 
-        let _ = logs_tx.send(logs_entry.clone());
+        let _ = app_event_tx.send(AppStateEvent::Log(logs_entry.clone()));
 
         tokio::spawn(async move {
             let mut logs = logs.write().await;

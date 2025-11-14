@@ -18,6 +18,7 @@ pub mod logs;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WebSocketMessage {
+    RegisterUserClient,
     UpdateParameters(parameters::Parameters),
     Logs(Vec<logs::LogEntry>),
     RegisterComputeNode(compute_node::ComputeNodeCapabilities),

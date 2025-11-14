@@ -4,4 +4,4 @@ import type { ComputeNodeCapabilities } from "./ComputeNodeCapabilities";
 import type { LogEntry } from "./LogEntry";
 import type { Parameters } from "./Parameters";
 
-export type WebSocketMessage = { "update_parameters": Parameters } | { "logs": Array<LogEntry> } | { "register_compute_node": ComputeNodeCapabilities } | { "announce_compute_node": ComputeNodeAnnouncement };
+export type WebSocketMessage = "register_user_client" | { "update_parameters": Parameters } | { "logs": Array<LogEntry> } | { "register_compute_node": ComputeNodeCapabilities } | { "announce_compute_node": ComputeNodeAnnouncement };
