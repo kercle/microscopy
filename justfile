@@ -24,11 +24,11 @@ build-firmware:
     cargo build --release
 
 [working-directory: "software/firmware"]
-flash:
+flash device:
     . "$HOME/.rustup/export-esp.sh"
     cargo build --release
     echo "$(pwd)"
-    espflash flash --chip esp32 --port /dev/ttyUSB0 \
+    espflash flash --chip esp32 --port {{device}} \
         "../../target/xtensa-esp32-none-elf/release/firmware"
 
 monitor device:

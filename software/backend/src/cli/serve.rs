@@ -156,14 +156,15 @@ impl Command {
 
         let (frame_tx, frame_rx) = watch::channel::<Arc<Bytes>>(Arc::new(Bytes::new()));
         let logs = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-        let device_driver =
-            if let Ok(device_driver) = DeviceDriver::new(&PathBuf::from("/dev/ttyUSB0"), 115200) {
-                info!("Connecting to device on /dev/ttyUSB0");
-                Some(Arc::new(tokio::sync::Mutex::new(device_driver)))
-            } else {
-                warn!("No device found on /dev/ttyUSB0");
-                None
-            };
+        let device_driver = if let Ok(device_driver) =
+            DeviceDriver::new(&PathBuf::from("/dev/ttyMicroscopeController"), 115200)
+        {
+            info!("Connecting to device on /dev/ttyMicroscopeController");
+            Some(Arc::new(tokio::sync::Mutex::new(device_driver)))
+        } else {
+            warn!("No device found on /dev/ttyMicroscopeController");
+            None
+        };
         let config = crate::control_app::Config {
             z_scan_dir: self.get_z_scan_dir().await,
         };
