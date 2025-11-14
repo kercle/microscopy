@@ -32,14 +32,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
     })
 }
 
-async fn process_text_message(text: &str, conn: &mut WsConnection) {
-    let msg = if let Ok(v) = serde_json::from_str::<WebSocketMessage>(&text) {
-        v
-    } else {
-        error!("Failed to parse JSON from text message");
-        return;
-    };
-
+async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) {
     match msg {
         WebSocketMessage::UpdateParameters(new_params) => {
             let mut p = conn.app.parameters_controller.write().await;
@@ -57,7 +50,14 @@ async fn process_text_message(text: &str, conn: &mut WsConnection) {
 async fn process_message(msg: ws::Message, conn: &mut WsConnection) {
     match msg {
         ws::Message::Text(text) => {
-            process_text_message(&text, conn).await;
+            let msg = if let Ok(v) = serde_json::from_str::<WebSocketMessage>(&text) {
+                v
+            } else {
+                error!("Failed to parse JSON from text message");
+                return;
+            };
+
+            process_parsed_message(msg, conn).await;
         }
         ws::Message::Binary(_bin) => {
             // Handle binary message
