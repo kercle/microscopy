@@ -2,7 +2,7 @@ use anyhow::Result;
 use axum::response::IntoResponse;
 use axum::{
     extract::State,
-    extract::ws::{WebSocket, WebSocketUpgrade},
+    extract::ws::{self, WebSocket, WebSocketUpgrade},
 };
 use serde_json::json;
 use tracing::{error, info};
@@ -38,16 +38,15 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
     })
 }
 
-async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
+async fn process_message(msg: ws::Message, app: &AppState) {
     match msg {
-        axum::extract::ws::Message::Text(text) => {
-            let msg =
-                if let Ok(v) = serde_json::from_str::<ws_com::WebSocketMessage>(&text) {
-                    v
-                } else {
-                    error!("Failed to parse JSON from text message");
-                    return;
-                };
+        ws::Message::Text(text) => {
+            let msg = if let Ok(v) = serde_json::from_str::<ws_com::WebSocketMessage>(&text) {
+                v
+            } else {
+                error!("Failed to parse JSON from text message");
+                return;
+            };
 
             match msg {
                 ws_com::WebSocketMessage::UpdateParameters(new_params) => {
@@ -68,16 +67,16 @@ async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
             //     error!("Failed to parse parameters from text message");
             // }
         }
-        axum::extract::ws::Message::Binary(_bin) => {
+        ws::Message::Binary(_bin) => {
             // Handle binary message
         }
-        axum::extract::ws::Message::Close(_close_frame) => {
+        ws::Message::Close(_close_frame) => {
             // Handle close message
         }
-        axum::extract::ws::Message::Ping(_ping) => {
+        ws::Message::Ping(_ping) => {
             // Handle ping
         }
-        axum::extract::ws::Message::Pong(_pong) => {
+        ws::Message::Pong(_pong) => {
             // Handle pong
         }
     }
@@ -98,7 +97,7 @@ async fn handle_socket(mut conn: WsConnection) -> Result<()> {
     };
 
     conn.socket
-        .send(axum::extract::ws::Message::Text(payload_json.into()))
+        .send(ws::Message::Text(payload_json.into()))
         .await?;
 
     let msg = serde_json::to_string(&json!({
@@ -106,7 +105,7 @@ async fn handle_socket(mut conn: WsConnection) -> Result<()> {
     }));
 
     conn.socket
-        .send(axum::extract::ws::Message::Text(msg.unwrap().into()))
+        .send(ws::Message::Text(msg.unwrap().into()))
         .await?;
 
     loop {
@@ -128,14 +127,14 @@ async fn handle_socket(mut conn: WsConnection) -> Result<()> {
 
                 let payload = ws_com::WebSocketMessage::UpdateParameters(params);
                 let payload_json = serde_json::to_string(&payload).unwrap();
-                conn.socket.send(axum::extract::ws::Message::Text(payload_json.into())).await?;
+                conn.socket.send(ws::Message::Text(payload_json.into())).await?;
             }
             Ok(log_msg) = log_rx.recv() => {
                 let msg = serde_json::to_string(&json!({
                     "logs": [log_msg]
                 }));
 
-                conn.socket.send(axum::extract::ws::Message::Text(msg.unwrap().into())).await?;
+                conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
             }
         }
     }
