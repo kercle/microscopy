@@ -22,7 +22,7 @@ pub enum WebSocketMessage {
     RegisterComputeNode(ComputeNodeCapabilities),
 
     UpdateParameters(Parameters),
-    ComputeNodeAnnouncement(Vec<ComputeNode>),
+    ComputeNodes(Vec<ComputeNode>),
 
     Logs(Vec<LogEntry>),
 }

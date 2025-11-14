@@ -4,7 +4,6 @@ use axum::{
     extract::State,
     extract::ws::{self, WebSocket, WebSocketUpgrade},
 };
-use serde_json::json;
 use tokio::sync::{broadcast, watch};
 use tracing::{error, info};
 
@@ -48,23 +47,26 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             conn.role = PeerRole::UserClient;
             info!("WebSocket client registered as UserClient");
 
+            // Send current parameters
             let payload_json = {
                 let params_guard = conn.app.parameters_controller.read().await;
                 let payload = WebSocketMessage::UpdateParameters(params_guard.parameters.clone());
                 serde_json::to_string(&payload).unwrap()
             };
-
             conn.socket
                 .send(ws::Message::Text(payload_json.into()))
                 .await?;
 
-            let msg = serde_json::to_string(&json!({
-                "logs": conn.app.get_logs().await
-            }));
+            // Send registered compute nodes
+            let compute_nodes = conn.app.list_compute_nodes().await;
+            let msg =
+                serde_json::to_string(&WebSocketMessage::ComputeNodes(compute_nodes))?;
+            conn.socket.send(ws::Message::Text(msg.into())).await?;
 
-            conn.socket
-                .send(ws::Message::Text(msg.unwrap().into()))
-                .await?;
+            // Send existing logs
+            let logs = conn.app.get_logs().await;
+            let msg = serde_json::to_string(&WebSocketMessage::Logs(logs))?;
+            conn.socket.send(ws::Message::Text(msg.into())).await?;
         }
         WebSocketMessage::RegisterComputeNode(capabilities) => {
             let node_id = conn.app.register_compute_node(&capabilities).await;
@@ -79,7 +81,7 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
         }
-        WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodeAnnouncement(_) => {
+        WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodes(_) => {
             // message to client only; ignore
         }
     }
@@ -159,7 +161,7 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                         conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
                     }
                     AppStateEvent::ComputeNoteUpdate(node_list) => {
-                        let payload = WebSocketMessage::ComputeNodeAnnouncement(node_list);
+                        let payload = WebSocketMessage::ComputeNodes(node_list);
                         let msg = serde_json::to_string(&payload);
                         conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
                     }

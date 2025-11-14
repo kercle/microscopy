@@ -264,6 +264,10 @@ impl AppState {
         Ok(Bytes::copy_from_slice(map.as_slice()))
     }
 
+    pub async fn list_compute_nodes(&self) -> Vec<ComputeNode> {
+        self.compute_nodes.list().await
+    }
+
     pub async fn register_compute_node(&self, capabilities: &ComputeNodeCapabilities) -> String {
         let (node_id, node_list) = self.compute_nodes.register(capabilities).await;
 

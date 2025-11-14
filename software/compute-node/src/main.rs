@@ -77,8 +77,14 @@ async fn sender_thread(
 }
 
 async fn ctrlc_handler(cancellation_token: CancellationToken) {
-    let _ = tokio::signal::ctrl_c().await;
-    cancellation_token.cancel();
+    tokio::select! {
+        _ = cancellation_token.cancelled() => {
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("Ctrl-C received, shutting down...");
+            cancellation_token.cancel();
+        }
+    }
 }
 
 #[tokio::main]
@@ -93,19 +99,15 @@ async fn main() {
     let (write, read) = ws_stream.split();
 
     let cancellation_token = CancellationToken::new();
-
-    let rcv_thread = tokio::spawn(receiver_thread(cancellation_token.child_token(), read));
-    let snd_thread = tokio::spawn(sender_thread(cancellation_token.child_token(), write));
+    let recv_cancellation_token = cancellation_token.child_token();
+    let send_cancellation_token = cancellation_token.child_token();
 
     tokio::spawn(ctrlc_handler(cancellation_token));
 
-    let (res_rcv, res_snd) = tokio::join!(rcv_thread, snd_thread);
-
-    if let Err(e) = res_rcv {
-        eprintln!("Receiver thread error: {}", e);
-    }
-
-    if let Err(e) = res_snd {
-        eprintln!("Sender thread error: {}", e);
+    tokio::select! {
+        _ = receiver_thread(recv_cancellation_token, read) => {
+        }
+        _ = sender_thread(send_cancellation_token, write) => {
+        }
     }
 }

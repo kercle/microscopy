@@ -11,7 +11,7 @@ pub trait ComputeNodeContainerExt {
         capabilities: &ComputeNodeCapabilities,
     ) -> (String, Vec<ComputeNode>);
     async fn unregister(&self, node_id: &str) -> Vec<ComputeNode>;
-    async fn _list(&self) -> Vec<ComputeNode>;
+    async fn list(&self) -> Vec<ComputeNode>;
 }
 
 impl ComputeNodeContainerExt for ComputeNodeContainer {
@@ -32,7 +32,7 @@ impl ComputeNodeContainerExt for ComputeNodeContainer {
         list_compute_nodes(&compute_nodes)
     }
 
-    async fn _list(&self) -> Vec<ComputeNode> {
+    async fn list(&self) -> Vec<ComputeNode> {
         let compute_nodes = self.read().await;
         list_compute_nodes(&compute_nodes)
     }
