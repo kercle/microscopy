@@ -10,7 +10,7 @@ use {std::format, std::string::ToString, ts_rs::TS};
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
-enum Input {
+pub enum Input {
     Selection {
         display_name: String,
         options: Vec<String>,
@@ -20,7 +20,7 @@ enum Input {
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
-enum Output {
+pub enum Output {
     Image { display_name: String },
 }
 
@@ -28,10 +28,10 @@ enum Output {
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Procedure {
-    display_name: String,
-    description: String,
-    inputs: HashMap<String, Input>,
-    outputs: HashMap<String, Output>,
+    pub display_name: String,
+    pub description: String,
+    pub inputs: HashMap<String, Input>,
+    pub outputs: HashMap<String, Output>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
