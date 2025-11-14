@@ -1,16 +1,20 @@
-use std::format;
-use std::string::{String, ToString};
 use std::vec::Vec;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+
+#[cfg(feature = "ts")]
+use {
+    std::format,
+    std::string::{String, ToString},
+    ts_rs::TS,
+};
 
 pub mod compute_node;
 pub mod parameters;
 pub mod logs;
 
-#[derive(TS)]
-#[ts(export)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WebSocketMessage {

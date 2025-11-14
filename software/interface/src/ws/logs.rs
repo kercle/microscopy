@@ -1,11 +1,11 @@
-use std::format;
-use std::string::{String, ToString};
-
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+use std::string::String;
 
-#[derive(TS)]
-#[ts(export)]
+#[cfg(feature = "ts")]
+use {std::format, std::string::ToString, ts_rs::TS};
+
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LogEntry {
     pub timestamp: String,

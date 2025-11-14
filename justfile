@@ -2,7 +2,7 @@ export PATH := "~/.cargo/bin:" + env_var('PATH')
 
 default_backend_host := "localhost:3000"
 
-deploy target_host:
+deploy target_host: export-bindings
     cross build --release --bin control-app --target "aarch64-unknown-linux-gnu"
     curl -X POST "http://{{target_host}}:3000/api/update/self" \
          -H "Content-Type: application/octet-stream" \
@@ -40,4 +40,4 @@ explore:
 
 [working-directory: "software/interface"]
 export-bindings:
-    TS_RS_EXPORT_DIR="../frontend/src/lib/bindings" cargo test export_bindings
+    TS_RS_EXPORT_DIR="../frontend/src/lib/bindings" cargo test --features=ts export_bindings

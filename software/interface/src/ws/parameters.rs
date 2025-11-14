@@ -1,20 +1,23 @@
-use std::format;
-use std::string::{String, ToString};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+#[cfg(feature = "ts")]
+use {
+    std::format,
+    std::string::{String, ToString},
+    ts_rs::TS,
+};
 
-#[derive(TS)]
-#[ts(export)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Parameters {
     pub camera_properties: CameraProperties,
 }
 
-#[derive(TS)]
-#[ts(export)]
-#[ts(optional_fields)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "ts", ts(optional_fields))]
 #[serde_with::skip_serializing_none]
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -32,8 +35,8 @@ pub struct CameraProperties {
     pub test_pattern: Option<TestPattern>,
 }
 
-#[derive(TS)]
-#[ts(export)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum WhiteBalanceMode {
@@ -62,8 +65,8 @@ impl Display for WhiteBalanceMode {
     }
 }
 
-#[derive(TS)]
-#[ts(export)]
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum TestPattern {
