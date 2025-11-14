@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "com-client"
-path = "src/cli.rs"
+path = "src/uart/cli.rs"
 required-features = ["host", "cli"]
 
 [features]

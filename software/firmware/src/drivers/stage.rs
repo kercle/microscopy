@@ -1,4 +1,4 @@
-use communication::StageMotorCmd;
+use communication::uart::StageMotorCmd;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, TryReceiveError, TrySendError},
@@ -314,7 +314,7 @@ pub async fn motor_task(
                 }
             }
             Ok(StageMotorCmd::ReportPosition) => {
-                send_device_event(communication::DeviceEvent::StageMotorPosition {
+                send_device_event(communication::uart::DeviceEvent::StageMotorPosition {
                     position_steps: state.position,
                 });
             }

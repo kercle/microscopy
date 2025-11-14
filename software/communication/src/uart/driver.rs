@@ -1,3 +1,6 @@
+#[cfg(feature = "std")]
+extern crate std;
+
 use std::boxed::Box;
 use std::path::Path;
 use std::vec::Vec;
@@ -6,7 +9,7 @@ use anyhow::Result;
 use serde::{Serialize, de::DeserializeOwned};
 use serialport::SerialPort;
 
-use crate::{DeviceEvent, HostCommand};
+use crate::uart::{DeviceEvent, HostCommand};
 
 type EventBuffer = [u8; 4096];
 
@@ -135,7 +138,7 @@ impl DeviceDriver {
     }
 
     pub async fn home<StrType: Serialize + DeserializeOwned>(&mut self) -> Result<()> {
-        self.send_command::<StrType>(HostCommand::StageMotor(crate::StageMotorCmd::Home))
+        self.send_command::<StrType>(HostCommand::StageMotor(crate::uart::StageMotorCmd::Home))
             .await
     }
 
@@ -144,7 +147,7 @@ impl DeviceDriver {
         position: i32,
     ) -> Result<()> {
         self.send_command::<StrType>(HostCommand::StageMotor(
-            crate::StageMotorCmd::SetUpperLimit(position),
+            crate::uart::StageMotorCmd::SetUpperLimit(position),
         ))
         .await
     }
@@ -155,7 +158,7 @@ impl DeviceDriver {
         step_delay_us: u32,
     ) -> Result<()> {
         self.send_command::<StrType>(HostCommand::StageMotor(
-            crate::StageMotorCmd::MoveSteps {
+            crate::uart::StageMotorCmd::MoveSteps {
                 steps,
                 step_delay_us,
             },

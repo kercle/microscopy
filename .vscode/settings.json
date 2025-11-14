@@ -2,5 +2,13 @@
     "rust-analyzer.check.allTargets": false,
     "cSpell.words": [
         "tauri"
-    ]
+    ],
+    "rust-analyzer.linkedProjects": [
+        "./software/backend/Cargo.toml",
+        "./software/communication/Cargo.toml",
+        {
+            "manifest": "./software/firmware/Cargo.toml",
+            "target": "xtensa-esp32-none-elf"
+        }
+    ],
 }

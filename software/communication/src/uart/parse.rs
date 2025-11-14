@@ -1,10 +1,13 @@
+#[cfg(feature = "std")]
+extern crate std;
+
 use std::fmt;
 use std::str::FromStr;
 use std::string::{String, ToString};
 
 use regex::Regex;
 
-use crate::{HostCommand, StageMotorCmd};
+use crate::uart::{HostCommand, StageMotorCmd};
 
 impl StageMotorCmd {
     fn parse_enable(s: &str) -> Option<Self> {

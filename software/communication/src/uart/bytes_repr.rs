@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::Error;
+use crate::uart::Error;
 
 pub fn encode_bytes<T: Serialize>(obj: &T, buffer: &mut [u8]) -> Result<usize, Error> {
     if let Ok(encoded) = postcard::to_slice_cobs(obj, buffer) {
