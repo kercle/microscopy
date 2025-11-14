@@ -10,11 +10,21 @@ use tracing::{error, info};
 use crate::control_app::AppState;
 use interface::ws as ws_com;
 
+struct WsConnection {
+    socket: WebSocket,
+    app: AppState,
+}
+
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
     info!("New WebSocket connection");
 
     ws.on_upgrade(async move |socket| {
-        if let Err(err) = handle_socket(socket, app).await {
+        let connection = WsConnection {
+            socket,
+            app: app.clone(),
+        };
+
+        if let Err(err) = handle_socket(connection).await {
             eprintln!("Error handling WebSocket: {}", err);
         }
     })
@@ -65,38 +75,38 @@ async fn process_message(msg: axum::extract::ws::Message, app: &AppState) {
     }
 }
 
-async fn handle_socket(mut socket: WebSocket, app: AppState) -> Result<()> {
+async fn handle_socket(mut conn: WsConnection) -> Result<()> {
     let mut rx = {
-        let p = app.parameters_controller.read().await;
+        let p = conn.app.parameters_controller.read().await;
         p.subscribe_changes()
     };
 
-    let mut log_rx = app.subscribe_to_logs().await;
+    let mut log_rx = conn.app.subscribe_to_logs().await;
 
     let payload_json = {
-        let params_guard = app.parameters_controller.read().await;
+        let params_guard = conn.app.parameters_controller.read().await;
         let payload = ws_com::WebSocketMessage::UpdateParameters(params_guard.parameters.clone());
         serde_json::to_string(&payload).unwrap()
     };
 
-    socket
+    conn.socket
         .send(axum::extract::ws::Message::Text(payload_json.into()))
         .await?;
 
     let msg = serde_json::to_string(&json!({
-        "logs": app.get_logs().await
+        "logs": conn.app.get_logs().await
     }));
 
-    socket
+    conn.socket
         .send(axum::extract::ws::Message::Text(msg.unwrap().into()))
         .await?;
 
     loop {
         tokio::select! {
-            msg = socket.recv() => {
+            msg = conn.socket.recv() => {
                 match msg {
                     Some(Ok(msg)) => {
-                        process_message(msg, &app).await;
+                        process_message(msg, &conn.app).await;
                     }
                     Some(Err(err)) => {
                         eprintln!("WebSocket error: {}", err);
@@ -110,14 +120,14 @@ async fn handle_socket(mut socket: WebSocket, app: AppState) -> Result<()> {
 
                 let payload = ws_com::WebSocketMessage::UpdateParameters(params);
                 let payload_json = serde_json::to_string(&payload).unwrap();
-                socket.send(axum::extract::ws::Message::Text(payload_json.into())).await?;
+                conn.socket.send(axum::extract::ws::Message::Text(payload_json.into())).await?;
             }
             Ok(log_msg) = log_rx.recv() => {
                 let msg = serde_json::to_string(&json!({
                     "logs": [log_msg]
                 }));
 
-                socket.send(axum::extract::ws::Message::Text(msg.unwrap().into())).await?;
+                conn.socket.send(axum::extract::ws::Message::Text(msg.unwrap().into())).await?;
             }
         }
     }
