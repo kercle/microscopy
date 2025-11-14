@@ -79,8 +79,8 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
         }
-        WebSocketMessage::Logs(_) => {
-            // logs from client are ignored
+        WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodeAnnouncement(_) => {
+            // message to client only; ignore
         }
     }
 
@@ -158,8 +158,10 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                         let msg = serde_json::to_string(&payload);
                         conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
                     }
-                    AppStateEvent::ComputeNoteUpdate(_node_list) => {
-                        // TODO
+                    AppStateEvent::ComputeNoteUpdate(node_list) => {
+                        let payload = WebSocketMessage::ComputeNodeAnnouncement(node_list);
+                        let msg = serde_json::to_string(&payload);
+                        conn.socket.send(ws::Message::Text(msg.unwrap().into())).await?;
                     }
                 };
             }

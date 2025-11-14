@@ -7,6 +7,7 @@ mod cli;
 mod control_app;
 mod handlers;
 mod parameters;
+mod compute_node;
 
 #[tokio::main]
 async fn main() {

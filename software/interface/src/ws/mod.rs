@@ -3,15 +3,15 @@ use std::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "ts")]
-use {
-    std::format,
-    std::string::{String, ToString},
-    ts_rs::TS,
-};
+use {std::format, std::string::ToString, ts_rs::TS};
 
 pub mod compute_node;
 pub mod logs;
 pub mod parameters;
+
+use compute_node::{ComputeNode, ComputeNodeCapabilities};
+use parameters::Parameters;
+use logs::LogEntry;
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
@@ -19,9 +19,10 @@ pub mod parameters;
 #[serde(rename_all = "snake_case")]
 pub enum WebSocketMessage {
     RegisterUserClient,
-    RegisterComputeNode(compute_node::ComputeNodeCapabilities),
+    RegisterComputeNode(ComputeNodeCapabilities),
 
-    UpdateParameters(parameters::Parameters),
+    UpdateParameters(Parameters),
+    ComputeNodeAnnouncement(Vec<ComputeNode>),
 
-    Logs(Vec<logs::LogEntry>),
+    Logs(Vec<LogEntry>),
 }

@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
-use interface::ws::compute_node::ComputeNodeCapabilities;
+use interface::ws::compute_node::{ComputeNode, ComputeNodeCapabilities};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
@@ -13,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
+use crate::compute_node::{ComputeNodeContainer, ComputeNodeContainerExt};
 use crate::parameters::ParametersController;
 use interface::uart::driver::DeviceDriver;
 use interface::ws::{logs::LogEntry, parameters::Parameters};
@@ -32,7 +31,7 @@ pub struct AppStateGuard<'a> {
 #[derive(Clone)]
 pub enum AppStateEvent {
     Log(LogEntry),
-    ComputeNoteUpdate(Vec<String>),
+    ComputeNoteUpdate(Vec<ComputeNode>),
 }
 
 #[derive(Clone)]
@@ -52,7 +51,7 @@ pub struct AppState {
 
     pub config: Config,
 
-    compute_nodes: Arc<RwLock<HashMap<String, ComputeNodeCapabilities>>>,
+    compute_nodes: ComputeNodeContainer,
 }
 
 impl AppState {
@@ -127,7 +126,7 @@ impl AppState {
         device_driver: Option<Arc<Mutex<DeviceDriver>>>,
         parameters: ParametersController,
         config: Config,
-        compute_nodes: Arc<RwLock<HashMap<String, ComputeNodeCapabilities>>>,
+        compute_nodes: ComputeNodeContainer,
     ) -> Result<AppState> {
         let (app_event_tx, _app_event_rx) = broadcast::channel(MAX_LOG_ENTRIES);
 
@@ -266,28 +265,18 @@ impl AppState {
     }
 
     pub async fn register_compute_node(&self, capabilities: &ComputeNodeCapabilities) -> String {
-        let node_id = uuid::Uuid::new_v4().to_string();
+        let (node_id, node_list) = self.compute_nodes.register(capabilities).await;
 
-        let compute_node_list = {
-            let mut compute_nodes = self.compute_nodes.write().await;
-            compute_nodes.insert(node_id.clone(), capabilities.clone());
-            compute_nodes.keys().cloned().collect()
-        };
-
-        let msg = AppStateEvent::ComputeNoteUpdate(compute_node_list);
+        let msg = AppStateEvent::ComputeNoteUpdate(node_list);
         let _ = self.app_event_tx.send(msg);
 
         node_id
     }
 
     pub async fn unregister_compute_node(&self, node_id: &str) {
-        let compute_node_list = {
-            let mut compute_nodes = self.compute_nodes.write().await;
-            compute_nodes.remove(node_id);
-            compute_nodes.keys().cloned().collect()
-        };
+        let node_list = self.compute_nodes.unregister(node_id).await;
 
-        let msg = AppStateEvent::ComputeNoteUpdate(compute_node_list);
+        let msg = AppStateEvent::ComputeNoteUpdate(node_list);
         let _ = self.app_event_tx.send(msg);
     }
 }
