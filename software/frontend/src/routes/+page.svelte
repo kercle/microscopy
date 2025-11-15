@@ -13,6 +13,7 @@
 	import SampleScans from '$lib/components/SampleScans.svelte';
 	import Processing from '$lib/icons/Processing.svelte';
 	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
+	import ProcessingTab from '$lib/components/ProcessingTab.svelte';
 
 	let appState: State = $state({
 		ws: null,
@@ -21,15 +22,22 @@
 
 	let camera_controls_ref: CameraControls;
 	let logs_journal_ref: LogsJournal;
+	let processing_tab_ref: ProcessingTab;
 
 	$effect(() => {
 		appState.ws = connect((event: MessageEvent) => {
 			let msg: WebSocketMessage = JSON.parse(event.data);
 
-			if ("logs" in msg) {
+			if (msg === 'register_user_client') {
+				return;
+			}
+
+			if ('logs' in msg) {
 				logs_journal_ref.addLogMessages(msg.logs);
-			} else if ("update_parameters" in msg) {
+			} else if ('update_parameters' in msg) {
 				camera_controls_ref.update(msg.update_parameters);
+			} else if ('compute_nodes' in msg) {
+				processing_tab_ref.updateComputeNodes(msg.compute_nodes);
 			}
 		});
 		return () => appState.ws?.close();
@@ -73,9 +81,8 @@
 				<span class="ml-2">Processing</span>
 			</label>
 			<div class="tab-content bg-base-100 p-6">
-				<p>TODO</p>
+				<ProcessingTab bind:this={processing_tab_ref} />
 			</div>
-
 
 			<!-- Tab 4: Journal -->
 			<label class="tab">
