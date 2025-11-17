@@ -42,9 +42,9 @@
 		<div class="card card-border border-base-300 bg-base-100 flex-auto">
             <div class="card-body flex flex-col gap-4">
 			{#each listInputsForProcedure(entry.procedure) as { input_id, input_entry }}
+				<p class="mb-[-0.5em]">{input_entry.Selection.display_name}</p>
 				{#if 'Selection' in input_entry}
-					<p>{input_entry.Selection.display_name}</p>
-                    <select class="select select-bordered w-full">
+                    <select class="select select-ghost w-full">
                         {#each input_entry.Selection.options as option}
                             <option>{option}</option>
                         {/each}
