@@ -3,6 +3,7 @@
 	import type { Input } from '$lib/bindings/Input';
 	import type { Procedure } from '$lib/bindings/Procedure';
 	import Live from '$lib/icons/Live.svelte';
+	import ProcedureInputs from './ProcedureInputs.svelte';
 
 	let compute_nodes: ComputeNode[] = $state([]);
 
@@ -31,35 +32,12 @@
 
 		return procedure_list;
 	};
-
-	const listInputsForProcedure = (procedure: Procedure) => {
-		let input_list: { input_id: string; input_entry: Input }[] = [];
-
-		for (const [input_id, input_entry] of Object.entries(procedure.inputs)) {
-			if (input_entry !== undefined) {
-				input_list.push({ input_id, input_entry });
-			}
-		}
-
-		return input_list;
-	};
 </script>
 
 <div class="flex flex-row gap-2">
 	{#each listProcedures() as entry}
 		<div class="card card-border border-base-300 bg-base-100 flex-auto">
-			<div class="card-body flex flex-col gap-4">
-				{#each listInputsForProcedure(entry.procedure) as { input_id, input_entry }}
-					<p class="mb-[-0.5em]">{input_entry.Selection.display_name}</p>
-					{#if 'Selection' in input_entry}
-						<select class="select select-ghost w-full">
-							{#each input_entry.Selection.options as option}
-								<option>{option}</option>
-							{/each}
-						</select>
-					{/if}
-				{/each}
-			</div>
+			<ProcedureInputs procedure={entry.procedure} />
 		</div>
 
 		<div class="flex flex-col justify-center">

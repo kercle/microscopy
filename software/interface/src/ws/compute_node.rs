@@ -16,6 +16,10 @@ pub enum Input {
         options: Vec<String>,
         value: String,
     },
+    ImagePreview {
+        display_name: String,
+        href: String,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
