@@ -11,12 +11,20 @@
 	};
 
 	const listProcedures = () => {
-		let procedure_list: { procedure: Procedure }[] = [];
+		let procedure_list: {
+			compute_node_uuid: string;
+			procedure_id: string;
+			procedure: Procedure;
+		}[] = [];
 
 		for (const node of compute_nodes) {
-			for (const [key, procedure] of Object.entries(node.capabilities.procedures)) {
+			for (const [procedure_id, procedure] of Object.entries(node.capabilities.procedures)) {
 				if (procedure !== undefined) {
-					procedure_list.push({ procedure });
+					procedure_list.push({
+						procedure,
+						compute_node_uuid: node.node_id,
+						procedure_id: procedure_id
+					});
 				}
 			}
 		}
@@ -40,18 +48,18 @@
 <div class="flex flex-row gap-2">
 	{#each listProcedures() as entry}
 		<div class="card card-border border-base-300 bg-base-100 flex-auto">
-            <div class="card-body flex flex-col gap-4">
-			{#each listInputsForProcedure(entry.procedure) as { input_id, input_entry }}
-				<p class="mb-[-0.5em]">{input_entry.Selection.display_name}</p>
-				{#if 'Selection' in input_entry}
-                    <select class="select select-ghost w-full">
-                        {#each input_entry.Selection.options as option}
-                            <option>{option}</option>
-                        {/each}
-                    </select>
-				{/if}
-			{/each}
-            </div>
+			<div class="card-body flex flex-col gap-4">
+				{#each listInputsForProcedure(entry.procedure) as { input_id, input_entry }}
+					<p class="mb-[-0.5em]">{input_entry.Selection.display_name}</p>
+					{#if 'Selection' in input_entry}
+						<select class="select select-ghost w-full">
+							{#each input_entry.Selection.options as option}
+								<option>{option}</option>
+							{/each}
+						</select>
+					{/if}
+				{/each}
+			</div>
 		</div>
 
 		<div class="flex flex-col justify-center">
