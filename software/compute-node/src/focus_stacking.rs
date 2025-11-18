@@ -2,21 +2,11 @@ use std::collections::HashMap;
 
 use interface::ws::compute_node::{Input, Output, Procedure};
 
-struct InputData {
-    image_stack: String,
-}
-
-pub struct FocusStacking {
-    input_data: InputData,
-}
+pub struct FocusStacking {}
 
 impl FocusStacking {
     pub fn _new() -> Self {
-        FocusStacking {
-            input_data: InputData {
-                image_stack: String::new(),
-            },
-        }
+        FocusStacking {}
     }
 
     pub fn describe() -> Procedure {
