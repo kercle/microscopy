@@ -1,8 +1,13 @@
 <script lang="ts">
 	import type { Input } from '$lib/bindings/Input';
 	import type { Procedure } from '$lib/bindings/Procedure';
+	import type { State } from '$lib/state';
 
-	let { procedure }: { procedure: Procedure } = $props();
+	let {
+		compute_node_id,
+		procedure,
+		appState = $bindable<State>()
+	}: { compute_node_id: string; procedure: Procedure; appState: State } = $props();
 
 	const listInputsForProcedure = () => {
 		let input_list: { input_id: string; input_entry: Input }[] = [];
@@ -14,6 +19,12 @@
 		}
 
 		return input_list;
+	};
+
+	let input_elements: HTMLInputElement[] = [];
+
+	const updateUiFromInputs = () => {
+		// Placeholder for future functionality to update UI based on input changes
 	};
 </script>
 
@@ -27,7 +38,7 @@
 				{/each}
 			</select>
 		{:else if 'ImagePreview' in input_entry}
-            <p class="mb-2">{input_entry.ImagePreview.display_name}</p>
+			<p class="mb-2">{input_entry.ImagePreview.display_name}</p>
 			<div class="bg-base-200 flex h-48 w-full items-center justify-center">
 				<img
 					src={input_entry.ImagePreview.href}

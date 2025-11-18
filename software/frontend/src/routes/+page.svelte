@@ -81,7 +81,7 @@
 				<span class="ml-2">Processing</span>
 			</label>
 			<div class="tab-content bg-base-100 p-6">
-				<ProcessingTab bind:this={processing_tab_ref} />
+				<ProcessingTab bind:this={processing_tab_ref} appState={appState} />
 			</div>
 
 			<!-- Tab 4: Journal -->

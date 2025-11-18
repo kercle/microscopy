@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { ComputeNode } from '$lib/bindings/ComputeNode';
-	import type { Input } from '$lib/bindings/Input';
 	import type { Procedure } from '$lib/bindings/Procedure';
 	import Live from '$lib/icons/Live.svelte';
+	import type { State } from '$lib/state';
 	import ProcedureInputs from './ProcedureInputs.svelte';
 
+	let { appState = $bindable<State>() } = $props();
 	let compute_nodes: ComputeNode[] = $state([]);
 
 	export const updateComputeNodes = (new_compute_nodes: ComputeNode[]) => {
@@ -37,7 +38,11 @@
 <div class="flex flex-row gap-2">
 	{#each listProcedures() as entry}
 		<div class="card card-border border-base-300 bg-base-100 flex-auto">
-			<ProcedureInputs procedure={entry.procedure} />
+			<ProcedureInputs
+				compute_node_id={entry.compute_node_uuid}
+				procedure={entry.procedure}
+				{appState}
+			/>
 		</div>
 
 		<div class="flex flex-col justify-center">
