@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use axum::response::IntoResponse;
 use axum::{
     extract::State,
@@ -14,13 +14,30 @@ use interface::ws::parameters::Parameters;
 #[derive(PartialEq)]
 enum PeerRole {
     Unregistered,
-    UserClient,
+    UserClient(String),
     ComputeNode(String),
 }
 
-struct Receivers {
+impl PeerRole {
+    fn is_user_client(&self) -> bool {
+        matches!(self, PeerRole::UserClient(_))
+    }
+
+    fn get_id(&self) -> Result<String> {
+        match self {
+            PeerRole::UserClient(id) => Ok(id.clone()),
+            PeerRole::ComputeNode(id) => Ok(id.clone()),
+            PeerRole::Unregistered => Err(anyhow!(
+                "Unregistered client attempted to send procedure description"
+            )),
+        }
+    }
+}
+
+struct Channels {
     app_events: broadcast::Receiver<AppStateEvent>,
     params: watch::Receiver<Parameters>,
+    inter_client_relay: broadcast::Sender<WebSocketMessage>,
 }
 
 struct WsConnection {
@@ -28,7 +45,7 @@ struct WsConnection {
     app: AppState,
     socket: WebSocket,
 
-    receivers: Receivers,
+    channels: Channels,
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
@@ -44,8 +61,17 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(app): State<AppState>) -> im
 async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) -> Result<()> {
     match msg {
         WebSocketMessage::RegisterUserClient => {
-            conn.role = PeerRole::UserClient;
-            info!("WebSocket client registered as UserClient");
+            if conn.role != PeerRole::Unregistered {
+                error!("WebSocket client attempted to register again");
+                return Ok(());
+            }
+
+            let node_id = uuid::Uuid::new_v4().to_string();
+            conn.role = PeerRole::UserClient(node_id.clone());
+            info!(
+                "WebSocket client registered as UserClient with ID {}",
+                node_id
+            );
 
             // Send current parameters
             let payload_json = {
@@ -59,8 +85,7 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
 
             // Send registered compute nodes
             let compute_nodes = conn.app.list_compute_nodes().await;
-            let msg =
-                serde_json::to_string(&WebSocketMessage::ComputeNodes(compute_nodes))?;
+            let msg = serde_json::to_string(&WebSocketMessage::ComputeNodes(compute_nodes))?;
             conn.socket.send(ws::Message::Text(msg.into())).await?;
 
             // Send existing logs
@@ -69,6 +94,11 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             conn.socket.send(ws::Message::Text(msg.into())).await?;
         }
         WebSocketMessage::RegisterComputeNode(capabilities) => {
+            if conn.role != PeerRole::Unregistered {
+                error!("WebSocket client attempted to register again");
+                return Ok(());
+            }
+
             let node_id = conn.app.register_compute_node(&capabilities).await;
 
             conn.role = PeerRole::ComputeNode(node_id.clone());
@@ -80,6 +110,34 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
         WebSocketMessage::UpdateParameters(new_params) => {
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
+        }
+        WebSocketMessage::DescribeProcedureWithInputs {
+            procedure_name,
+            destination_uuid,
+            input_values,
+            ..
+        } => {
+            conn.channels.inter_client_relay.send(
+                WebSocketMessage::DescribeProcedureWithInputs {
+                    source_uuid: Some(conn.role.get_id()?),
+                    procedure_name,
+                    destination_uuid,
+                    input_values,
+                },
+            )?;
+        }
+        WebSocketMessage::ProcedureDescription {
+            procedure_name,
+            destination_uuid,
+            procedure,
+        } => {
+            conn.channels
+                .inter_client_relay
+                .send(WebSocketMessage::ProcedureDescription {
+                    procedure_name,
+                    destination_uuid,
+                    procedure,
+                })?;
         }
         WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodes(_) => {
             // message to client only; ignore
@@ -123,14 +181,17 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
         role: PeerRole::Unregistered,
         app: app.clone(),
         socket,
-        receivers: Receivers {
+        channels: Channels {
             app_events: app.subscribe_to_app_events().await,
             params: {
                 let p = app.parameters_controller.read().await;
                 p.subscribe_changes()
             },
+            inter_client_relay: app.inter_client_relay_tx.clone(),
         },
     };
+
+    let mut inter_client_relay_rx = app.inter_client_relay_tx.subscribe();
 
     loop {
         tokio::select! {
@@ -146,14 +207,36 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                     None => break, // Connection closed
                 }
             }
-            Ok(_) = conn.receivers.params.changed(), if conn.role == PeerRole::UserClient => {
-                let params = conn.receivers.params.borrow_and_update().clone();
+            Ok(msg) = inter_client_relay_rx.recv() => {
+                let self_id = if let Ok(id) = conn.role.get_id() {
+                    id
+                } else {
+                    continue; // Unregistered clients cannot receive inter-client messages
+                };
+
+                match &msg {
+                    WebSocketMessage::DescribeProcedureWithInputs { destination_uuid, .. } |
+                    WebSocketMessage::ProcedureDescription { destination_uuid, .. } => {
+                        if self_id != *destination_uuid {
+                            continue; // Not intended for this client
+                        }
+                    }
+                    _ => {
+                        continue; // Not intended for inter-client relay
+                    }
+                };
+
+                let payload_json = serde_json::to_string(&msg).unwrap();
+                conn.socket.send(ws::Message::Text(payload_json.into())).await?;
+            }
+            Ok(_) = conn.channels.params.changed(), if conn.role.is_user_client() => {
+                let params = conn.channels.params.borrow_and_update().clone();
 
                 let payload = WebSocketMessage::UpdateParameters(params);
                 let payload_json = serde_json::to_string(&payload).unwrap();
                 conn.socket.send(ws::Message::Text(payload_json.into())).await?;
             }
-            Ok(event) = conn.receivers.app_events.recv(), if conn.role == PeerRole::UserClient => {
+            Ok(event) = conn.channels.app_events.recv(), if conn.role.is_user_client() => {
                 match event {
                     AppStateEvent::Log(log_msg) => {
                         let payload = WebSocketMessage::Logs(vec![log_msg]);

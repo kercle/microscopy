@@ -3,6 +3,7 @@ use bytes::Bytes;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
+use interface::ws::WebSocketMessage;
 use interface::ws::compute_node::{ComputeNode, ComputeNodeCapabilities};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -38,6 +39,7 @@ pub enum AppStateEvent {
 pub struct AppState {
     frame_rx: watch::Receiver<Arc<Bytes>>,
     app_event_tx: broadcast::Sender<AppStateEvent>,
+    pub inter_client_relay_tx: broadcast::Sender<WebSocketMessage>,
 
     operation_semaphore: Arc<Semaphore>,
     operation_cancel_token: Arc<RwLock<CancellationToken>>,
@@ -141,6 +143,7 @@ impl AppState {
             device_driver,
             config,
             compute_nodes,
+            inter_client_relay_tx: broadcast::channel(100).0,
         };
 
         app_state.set_awb_enable(true);
