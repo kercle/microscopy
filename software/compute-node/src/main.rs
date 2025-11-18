@@ -48,13 +48,14 @@ async fn receiver_thread(
 }
 
 async fn sender_thread(
+    host_name: &str,
     cancellation_token: CancellationToken,
     mut write: impl SinkExt<Message> + Unpin,
 ) {
     let capabilities = ComputeNodeCapabilities {
         procedures: HashMap::from([(
             "focus_stacking".to_string(),
-            focus_stacking::FocusStacking::describe(),
+            focus_stacking::FocusStacking::describe(host_name).await,
         )]),
     };
 
@@ -89,11 +90,13 @@ async fn ctrlc_handler(cancellation_token: CancellationToken) {
 
 #[tokio::main]
 async fn main() {
-    let url = env::args()
+    let host_name = env::args()
         .nth(1)
         .unwrap_or_else(|| panic!("this program requires at least one argument"));
 
-    let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
+    let (ws_stream, _) = connect_async(format!("ws://{host_name}/api/ws"))
+        .await
+        .expect("Failed to connect");
     println!("WebSocket handshake has been successfully completed");
 
     let (write, read) = ws_stream.split();
@@ -107,7 +110,7 @@ async fn main() {
     tokio::select! {
         _ = receiver_thread(recv_cancellation_token, read) => {
         }
-        _ = sender_thread(send_cancellation_token, write) => {
+        _ = sender_thread(&host_name, send_cancellation_token, write) => {
         }
     }
 }

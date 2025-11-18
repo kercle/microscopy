@@ -6,8 +6,9 @@ use axum::extract::{Path, State};
 use axum::{Router, body::Body, response::IntoResponse, routing};
 use bytes::Bytes;
 use http::Response;
-use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
+
+use interface::rest::z_scan::ZScanMetadata;
 
 use crate::control_app::AppState;
 
@@ -25,16 +26,6 @@ pub fn get_router(app_state: AppState) -> Router<AppState> {
         )
         .route("/frame/{:uuid}/{:frame_idx}", routing::get(frame))
         .with_state(app_state)
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ZScanMetadata {
-    pub relative_start_pos: i32,
-    pub relative_stop_pos: i32,
-    pub steps_between_layers: u32,
-    pub frame_count: usize,
-    pub uuid: String,
-    pub timestamp: chrono::DateTime<chrono::Local>,
 }
 
 pub async fn record(

@@ -7,3 +7,5 @@ pub mod uart;
 
 #[cfg(feature = "std")]
 pub mod ws;
+#[cfg(feature = "std")]
+pub mod rest;
