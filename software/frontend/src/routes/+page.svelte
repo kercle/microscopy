@@ -14,6 +14,7 @@
 	import Processing from '$lib/icons/Processing.svelte';
 	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
 	import ProcessingTab from '$lib/components/ProcessingTab.svelte';
+	import { onMount } from 'svelte';
 
 	let appState: State = $state({
 		ws: null,
@@ -42,6 +43,19 @@
 		});
 		return () => appState.ws?.close();
 	});
+
+	const updateAnchor = (anchor: string) => {
+		history.replaceState(null, '', `#${anchor}`);
+	};
+
+	onMount(() => {
+		const anchor = window.location.hash.substring(1);
+		let input_element = document.getElementById(`tab-select-${anchor}`) as HTMLInputElement;
+
+		if (input_element) {
+			input_element.checked = true;
+		}
+	});
 </script>
 
 <div class="drawer drawer-end lg:drawer-open">
@@ -50,7 +64,13 @@
 		<div class="tabs tabs-border h-full w-full">
 			<!-- Tab 1: Live -->
 			<label class="tab">
-				<input type="radio" name="main-tabs" checked />
+				<input
+					id="tab-select-live"
+					type="radio"
+					name="main-tabs"
+					onchange={() => updateAnchor('live')}
+					checked
+				/>
 				<Live />
 				Live
 			</label>
@@ -66,7 +86,12 @@
 
 			<!-- Tab 2: Sample scans -->
 			<label class="tab">
-				<input type="radio" name="main-tabs" />
+				<input
+					id="tab-select-scans"
+					type="radio"
+					name="main-tabs"
+					onchange={() => updateAnchor('scans')}
+				/>
 				<Layers />
 				Scans
 			</label>
@@ -76,17 +101,27 @@
 
 			<!-- Tab 3: Processing -->
 			<label class="tab">
-				<input type="radio" name="main-tabs" />
+				<input
+					id="tab-select-processing"
+					type="radio"
+					name="main-tabs"
+					onchange={() => updateAnchor('processing')}
+				/>
 				<Processing />
 				<span class="ml-2">Processing</span>
 			</label>
 			<div class="tab-content bg-base-100 p-6">
-				<ProcessingTab bind:this={processing_tab_ref} appState={appState} />
+				<ProcessingTab bind:this={processing_tab_ref} {appState} />
 			</div>
 
 			<!-- Tab 4: Journal -->
 			<label class="tab">
-				<input type="radio" name="main-tabs" />
+				<input
+					id="tab-select-journal"
+					type="radio"
+					name="main-tabs"
+					onchange={() => updateAnchor('journal')}
+				/>
 				<Journal />
 				Journal
 			</label>
