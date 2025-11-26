@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::watch;
 use turbojpeg::{Compressor, Subsamp, YuvImage};
 
-use interface::ws as com_ws;
+use common::ws as com_ws;
 
 pub const STREAM_WIDTH: u32 = 1440;
 pub const STREAM_HEIGHT: u32 = 810;

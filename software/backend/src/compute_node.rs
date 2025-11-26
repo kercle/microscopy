@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use interface::ws::compute_node::{ComputeNode, ComputeNodeCapabilities};
+use common::ws::compute_node::{ComputeNode, ComputeNodeCapabilities};
 use tokio::sync::RwLock;
 
 pub type ComputeNodeContainer = Arc<RwLock<HashMap<String, ComputeNodeCapabilities>>>;

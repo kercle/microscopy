@@ -1,10 +1,10 @@
 [package]
-name = "interface"
+name = "common"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "interface"
+name = "common"
 path = "src/lib.rs"
 
 [[bin]]

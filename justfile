@@ -38,6 +38,6 @@ monitor device:
 explore:
     uv run --with jupyter jupyter lab
 
-[working-directory: "software/interface"]
+[working-directory: "software/common"]
 export-bindings:
     TS_RS_EXPORT_DIR="../frontend/src/lib/bindings" cargo test --features=ts export_bindings

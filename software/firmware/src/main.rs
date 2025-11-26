@@ -37,7 +37,7 @@ async fn uart_tx_task(mut tx: UartTx<'static, esp_hal::Async>) {
     let mut buffer = [0u8; 512];
 
     com::CHANNELS.send_device_event(DeviceEvent::LogMessage {
-        level: interface::uart::LogMessageLevel::Info,
+        level: common::uart::LogMessageLevel::Info,
         message: String::try_from("Firmware started.").unwrap(),
     });
 
@@ -83,15 +83,15 @@ async fn uart_rx_task(mut rx: UartRx<'static, esp_hal::Async>) {
         };
 
         let cmd_slice = &packet[..end_pos];
-        if let Ok(cmd) = interface::uart::HostCommand::decode_bytes(cmd_slice) {
+        if let Ok(cmd) = common::uart::HostCommand::decode_bytes(cmd_slice) {
             match cmd {
-                interface::uart::HostCommand::StageMotor(motor_cmd) => {
+                common::uart::HostCommand::StageMotor(motor_cmd) => {
                     let _ = drivers::stage::StageMotor::send_command(motor_cmd);
                 }
             }
         } else {
             let _ = com::CHANNELS.send_device_event(DeviceEvent::LogMessage {
-                level: interface::uart::LogMessageLevel::Error,
+                level: common::uart::LogMessageLevel::Error,
                 message: String::try_from("Failed to parse command.").unwrap(),
             });
         }
@@ -106,7 +106,7 @@ async fn _debug_msg_task() {
     loop {
         Timer::after(Duration::from_secs(2)).await;
         com::CHANNELS.send_device_event(DeviceEvent::LogMessage {
-            level: interface::uart::LogMessageLevel::Info,
+            level: common::uart::LogMessageLevel::Info,
             message: String::try_from("Debug message from firmware.").unwrap(),
         });
     }

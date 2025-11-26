@@ -8,8 +8,8 @@ use tokio::sync::{broadcast, watch};
 use tracing::{error, info};
 
 use crate::control_app::{AppState, AppStateEvent};
-use interface::ws::WebSocketMessage;
-use interface::ws::parameters::Parameters;
+use common::ws::WebSocketMessage;
+use common::ws::parameters::Parameters;
 
 #[derive(PartialEq)]
 enum PeerRole {

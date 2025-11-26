@@ -8,7 +8,7 @@ use bytes::Bytes;
 use http::Response;
 use tracing::{info, warn};
 
-use interface::rest::z_scan::ZScanMetadata;
+use common::rest::z_scan::ZScanMetadata;
 
 use crate::control_app::AppState;
 

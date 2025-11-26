@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use anyhow::{Result, bail};
 use reqwest;
 
-use interface::rest::z_scan::ZScanMetadata;
-use interface::ws::compute_node::{Input, Output, Procedure};
+use common::rest::z_scan::ZScanMetadata;
+use common::ws::compute_node::{Input, Output, Procedure};
 
 pub struct FocusStacking {}
 

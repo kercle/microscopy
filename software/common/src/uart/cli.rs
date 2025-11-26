@@ -1,6 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
-use interface::uart::{HostCommand, driver::DeviceDriver};
+use common::uart::{HostCommand, driver::DeviceDriver};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -14,7 +14,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, Paragraph},
 };
 
-type DeviceEvent = interface::uart::DeviceEvent<String>;
+type DeviceEvent = common::uart::DeviceEvent<String>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,7 +28,7 @@ enum Message {
     HostCommand(HostCommand),
     DeviceEvent(DeviceEvent),
     HostLog {
-        level: interface::uart::LogMessageLevel,
+        level: common::uart::LogMessageLevel,
         message: String,
     },
 }
@@ -171,7 +171,7 @@ impl App {
 
         app_event_tx
             .try_send(AppEvent::DisplayMessage(Message::HostLog {
-                level: interface::uart::LogMessageLevel::Info,
+                level: common::uart::LogMessageLevel::Info,
                 message: "Connection established.".into(),
             }))
             .ok();
@@ -295,7 +295,7 @@ impl App {
 
                     if let Err(e) = packet {
                         self.messages.push(Message::HostLog {
-                            level: interface::uart::LogMessageLevel::Error,
+                            level: common::uart::LogMessageLevel::Error,
                             message: format!("Failed to parse command: {e}"),
                         });
                     } else {
@@ -435,9 +435,9 @@ impl App {
                         DeviceEvent::InitSignature => {}
                         DeviceEvent::LogMessage { level, message } => {
                             let prefix = match level {
-                                interface::uart::LogMessageLevel::Info => "[INFO]".blue(),
-                                interface::uart::LogMessageLevel::Warning => "[WARN]".yellow(),
-                                interface::uart::LogMessageLevel::Error => "[ERROR]".red(),
+                                common::uart::LogMessageLevel::Info => "[INFO]".blue(),
+                                common::uart::LogMessageLevel::Warning => "[WARN]".yellow(),
+                                common::uart::LogMessageLevel::Error => "[ERROR]".red(),
                             };
                             msg.push(prefix);
                             msg.push(" ".into());
@@ -454,9 +454,9 @@ impl App {
                 }
                 Message::HostLog { level, message } => {
                     let prefix = match level {
-                        interface::uart::LogMessageLevel::Info => "[INFO]".blue(),
-                        interface::uart::LogMessageLevel::Warning => "[WARN]".yellow(),
-                        interface::uart::LogMessageLevel::Error => "[ERROR]".red(),
+                        common::uart::LogMessageLevel::Info => "[INFO]".blue(),
+                        common::uart::LogMessageLevel::Warning => "[WARN]".yellow(),
+                        common::uart::LogMessageLevel::Error => "[ERROR]".red(),
                     };
                     let msg = vec![
                         " ⊙ ".bold().dim(),

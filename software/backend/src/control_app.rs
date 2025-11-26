@@ -3,8 +3,8 @@ use bytes::Bytes;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
-use interface::ws::WebSocketMessage;
-use interface::ws::compute_node::{ComputeNode, ComputeNodeCapabilities};
+use common::ws::WebSocketMessage;
+use common::ws::compute_node::{ComputeNode, ComputeNodeCapabilities};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, RwLock, Semaphore, broadcast, watch};
@@ -14,8 +14,8 @@ use tracing::{info, warn};
 use crate::camera::{PHOTO_HEIGHT, PHOTO_WIDTH, STREAM_HEIGHT, STREAM_WIDTH};
 use crate::compute_node::{ComputeNodeContainer, ComputeNodeContainerExt};
 use crate::parameters::ParametersController;
-use interface::uart::driver::DeviceDriver;
-use interface::ws::{logs::LogEntry, parameters::Parameters};
+use common::uart::driver::DeviceDriver;
+use common::ws::{logs::LogEntry, parameters::Parameters};
 
 const MAX_LOG_ENTRIES: usize = 200;
 

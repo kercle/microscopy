@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env};
 
 use futures_util::{SinkExt, StreamExt};
-use interface::ws::compute_node::ComputeNodeCapabilities;
+use common::ws::compute_node::ComputeNodeCapabilities;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 
@@ -59,7 +59,7 @@ async fn sender_thread(
         )]),
     };
 
-    let payload = serde_json::to_string(&interface::ws::WebSocketMessage::RegisterComputeNode(
+    let payload = serde_json::to_string(&common::ws::WebSocketMessage::RegisterComputeNode(
         capabilities,
     ))
     .unwrap();
