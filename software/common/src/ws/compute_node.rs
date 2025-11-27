@@ -32,18 +32,49 @@ pub enum Output {
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Procedure {
+pub struct ElementPositioning {
+    pub row: u32,
+    pub column: u32,
+    pub row_span: u32,
+    pub column_span: u32,
+}
+
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Element {
+    Image {
+        display_name: String,
+        href: String,
+        positioning: ElementPositioning,
+    },
+    Select {
+        display_name: String,
+        options: Vec<String>,
+        value: String,
+        positioning: ElementPositioning,
+    },
+    Button {
+        display_name: String,
+        positioning: ElementPositioning,
+    },
+}
+
+#[cfg_attr(feature = "ts", derive(TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcedureUi {
     pub display_name: String,
     pub description: String,
-    pub inputs: HashMap<String, Input>,
-    pub outputs: HashMap<String, Output>,
+    pub columns: u32,
+    pub elements: HashMap<String, Element>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputeNodeCapabilities {
-    pub procedures: HashMap<String, Procedure>,
+    pub procedures: HashMap<String, ProcedureUi>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { ComputeNode } from '$lib/bindings/ComputeNode';
-	import type { Procedure } from '$lib/bindings/Procedure';
+	import type { ProcedureUi } from '$lib/bindings/ProcedureUi';
 	import Live from '$lib/icons/Live.svelte';
 	import type { State } from '$lib/state';
-	import ProcedureInputs from './ProcedureInputs.svelte';
+	import Procedure from './Procedure.svelte';
+	import ProcedureInputs from './Procedure.svelte';
 
 	let { appState = $bindable<State>() } = $props();
 	let compute_nodes: ComputeNode[] = $state([]);
@@ -16,7 +17,7 @@
 		let procedure_list: {
 			compute_node_uuid: string;
 			procedure_id: string;
-			procedure: Procedure;
+			procedure: ProcedureUi;
 		}[] = [];
 
 		for (const node of compute_nodes) {
@@ -35,9 +36,14 @@
 	};
 </script>
 
-<div class="flex flex-row gap-2">
+<div class="flex flex-col gap-2">
 	{#each listProcedures() as entry}
-		<div class="card card-border border-base-300 bg-base-100 flex-auto">
+		<Procedure
+			compute_node_id={entry.compute_node_uuid}
+			procedure={entry.procedure}
+			{appState}
+		/>
+		<!-- <div class="card card-border border-base-300 bg-base-100 flex-auto">
 			<ProcedureInputs
 				compute_node_id={entry.compute_node_uuid}
 				procedure={entry.procedure}
@@ -65,6 +71,6 @@
 
 		<div class="card card-border border-base-300 bg-base-100 flex-auto">
 			<div class="card-body">test</div>
-		</div>
+		</div> -->
 	{/each}
 </div>
