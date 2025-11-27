@@ -4,8 +4,7 @@
 
 	let { element }: { element: Element } = $props();
 
-	let type: string = $state('');
-	let positioning: ElementPositioning = $state({
+	let pos: ElementPositioning = $state({
 		row: 0,
 		column: 0,
 		row_span: 1,
@@ -13,67 +12,40 @@
 	});
 
 	if ('Select' in element) {
-		positioning = element.Select.positioning;
+		pos = element.Select.positioning;
 	} else if ('Image' in element) {
-		positioning = element.Image.positioning;
+		pos = element.Image.positioning;
 	} else {
 		throw new Error('Unsupported element type');
 	}
+
+	const makeWrapperStype = (pos: ElementPositioning) => {
+		return (
+			`grid-column: ${pos.column} / span ${pos.column_span};` +
+			`grid-row: ${pos.row} / span ${pos.row_span};`
+		);
+	};
+
+	const onChange = (event: Event) => {
+		const select = event.target as HTMLSelectElement;
+		console.log('Selected value:', select.value);
+	};
 </script>
 
-<!-- {#if 'Select' in element}
-	{@const obj = element.Select}
-	<div
-		class="col-start-{positioning.column} col-span-{positioning.column_span} row-start-{positioning.row} row-span-{positioning.row_span}"
-	>
+<div class="mb-2" style={makeWrapperStype(pos)}>
+	{#if 'Select' in element}
+		{@const obj = element.Select}
 		<p class="mb-2">{obj.display_name} ({obj.positioning.column})</p>
-		<select class="select select-ghost w-full">
+		<select class="select select-ghost w-full" onchange={onChange}>
 			{#each obj.options as option}
 				<option>{option}</option>
 			{/each}
 		</select>
-	</div>
-{:else if 'Image' in element}
-	{@const obj = element.Image}
-	<div
-		class="col-start-{positioning.column} col-span-{positioning.column_span} row-start-{positioning.row} row-span-{positioning.row_span}"
-	>
+	{:else if 'Image' in element}
+		{@const obj = element.Image}
 		<p>{obj.display_name} ({obj.positioning.column})</p>
 		<div class="flex w-full items-center justify-center">
 			<img src={obj.href} alt={obj.display_name} class="max-h-full max-w-full" />
 		</div>
-	</div>
-{/if} -->
-
-{#if 'Select' in element}
-    {@const obj = element.Select}
-    <div
-        class="mb-2"
-        style="
-            grid-column: {positioning.column} / span {positioning.column_span};
-            grid-row: {positioning.row} / span {positioning.row_span};
-        "
-    >
-        <p class="mb-2">{obj.display_name} ({obj.positioning.column})</p>
-        <select class="select select-ghost w-full">
-            {#each obj.options as option}
-                <option>{option}</option>
-            {/each}
-        </select>
-    </div>
-
-{:else if 'Image' in element}
-    {@const obj = element.Image}
-    <div
-        class="flex flex-col"
-        style="
-            grid-column: {positioning.column} / span {positioning.column_span};
-            grid-row: {positioning.row} / span {positioning.row_span};
-        "
-    >
-        <p>{obj.display_name} ({obj.positioning.column})</p>
-        <div class="flex w-full items-center justify-center">
-            <img src={obj.href} alt={obj.display_name} class="max-h-full max-w-full" />
-        </div>
-    </div>
-{/if}
+	{/if}
+</div>

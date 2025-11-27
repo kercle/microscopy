@@ -45,23 +45,12 @@ impl FocusStacking {
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
             columns: 4,
             elements: HashMap::from([
-                ("image_stack".to_string(), Element::Select {
-                    display_name: "Image stack".to_string(),
-                    options: image_stacks.clone(),
-                    value: "a".to_string(),
-                    positioning: ElementPositioning {
-                        row: 1,
-                        column: 1,
-                        row_span: 1,
-                        column_span: 2,
-                    },
-                }),
                 ("stack_preview".to_string(), Element::Image {
                     display_name: "Stack Preview".to_string(),
                     href: format!("http://{host_name}/api/z-scan/thumbnail/e4a5f501-0865-4b0b-9840-98744fce5d4e/0/150"),
                     positioning: ElementPositioning {
                         row: 1,
-                        column: 3,
+                        column: 1,
                         row_span: 1,
                         column_span: 1,
                     },
@@ -71,9 +60,20 @@ impl FocusStacking {
                     href: format!("http://{host_name}/api/z-scan/thumbnail/e4a5f501-0865-4b0b-9840-98744fce5d4e/0/150"),
                     positioning: ElementPositioning {
                         row: 1,
-                        column: 4,
+                        column: 2,
                         row_span: 1,
                         column_span: 1,
+                    },
+                }),
+                ("image_stack".to_string(), Element::Select {
+                    display_name: "Image stack".to_string(),
+                    options: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+                    value: "a".to_string(),
+                    positioning: ElementPositioning {
+                        row: 1,
+                        column: 3,
+                        row_span: 1,
+                        column_span: 2,
                     },
                 }),
             ]),
