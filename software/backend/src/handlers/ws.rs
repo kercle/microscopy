@@ -150,11 +150,12 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
 async fn process_message(msg: ws::Message, conn: &mut WsConnection) -> Result<()> {
     match msg {
         ws::Message::Text(text) => {
-            let msg = if let Ok(v) = serde_json::from_str::<WebSocketMessage>(&text) {
-                v
-            } else {
-                error!("Failed to parse JSON from text message");
-                return Ok(());
+            let msg: WebSocketMessage = match serde_json::from_str::<WebSocketMessage>(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Failed to parse JSON from text message: {}", &e);
+                    return Ok(());
+                }
             };
 
             process_parsed_message(msg, conn).await?;

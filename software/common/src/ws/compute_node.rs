@@ -36,6 +36,14 @@ pub enum Element {
         display_name: String,
         positioning: ElementPositioning,
     },
+    Slider {
+        display_name: String,
+        min: f64,
+        max: f64,
+        step: f64,
+        value: f64,
+        positioning: ElementPositioning,
+    },
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]

@@ -108,6 +108,19 @@ impl FocusStacking {
                         column_span: 2,
                     },
                 }),
+                ("test_slider".to_string(), Element::Slider {
+                    display_name: "Test Slider".to_string(),
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    value: 50.0,
+                    positioning: ElementPositioning {
+                        row: 2,
+                        column: 1,
+                        row_span: 1,
+                        column_span: 4,
+                    },
+                }),
             ]),
         }
     }

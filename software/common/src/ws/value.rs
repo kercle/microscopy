@@ -9,7 +9,9 @@ use {std::format, ts_rs::TS, crate::std::borrow::ToOwned};
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(type = "number | string | boolean"))]
 pub enum Value {
-    Number(f64),
+    UnsignedInteger(u64),
+    Integer(i64),
+    Float(f64),
     Text(String),
     Boolean(bool),
 }
@@ -20,7 +22,9 @@ impl Serialize for Value {
         S: serde::Serializer,
     {
         match self {
-            Value::Number(n) => serializer.serialize_f64(*n),
+            Value::UnsignedInteger(n) => serializer.serialize_u64(*n),
+            Value::Integer(n) => serializer.serialize_i64(*n),
+            Value::Float(n) => serializer.serialize_f64(*n),
             Value::Text(s) => serializer.serialize_str(s),
             Value::Boolean(b) => serializer.serialize_bool(*b),
         }
@@ -41,11 +45,25 @@ impl<'de> Deserialize<'de> for Value {
                 formatter.write_str("a number, string, or boolean")
             }
 
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::UnsignedInteger(value))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::Integer(value))
+            }
+
             fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(Value::Number(value))
+                Ok(Value::Float(value))
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>

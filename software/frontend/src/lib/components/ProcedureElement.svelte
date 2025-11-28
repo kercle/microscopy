@@ -21,8 +21,8 @@
 		pos = element.Select.positioning;
 	} else if ('Image' in element) {
 		pos = element.Image.positioning;
-	} else {
-		throw new Error('Unsupported element type');
+	} else if ('Slider' in element) {
+		pos = element.Slider.positioning;
 	}
 
 	const makeWrapperStype = (pos: ElementPositioning) => {
@@ -51,5 +51,19 @@
 		<div class="flex w-full items-center justify-center">
 			<img src={obj.href} alt={obj.display_name} class="max-h-full max-w-full" />
 		</div>
+	{:else if 'Slider' in element}
+		{@const obj = element.Slider}
+		<p class="mb-2">{obj.display_name} ({obj.positioning.column})</p>
+		<input
+			type="range"
+			min={obj.min}
+			max={obj.max}
+			step={obj.step}
+			value={obj.value}
+			class="range range-ghost w-full"
+			oninput={(e) => updateUi(elementId, parseFloat((e.target as HTMLInputElement).value))}
+		/>
+	{:else}
+		<p>Unsupported element type</p>
 	{/if}
 </div>
