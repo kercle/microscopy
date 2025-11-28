@@ -7,6 +7,8 @@ use reqwest;
 use common::rest::z_scan::ZScanMetadata;
 use common::ws::compute_node::{Widget, WidgetPosition, ProcedureUiDescription};
 
+const THUMBNAIL_SIZE: u32 = 400;
+
 pub struct FocusStacking {}
 
 impl FocusStacking {
@@ -14,7 +16,7 @@ impl FocusStacking {
         FocusStacking {}
     }
 
-    async fn _list_image_stacks(host_name: &str) -> Result<Vec<String>> {
+    async fn fetch_image_stacks(host_name: &str) -> Result<Vec<String>> {
         // request to microscope_url to get actual image stacks would go here
         let url = format!("http://{host_name}/api/z-scan/list");
         let response = reqwest::get(&url).await?;
@@ -28,12 +30,10 @@ impl FocusStacking {
         Ok(response.into_iter().map(|metadata| metadata.uuid).collect())
     }
 
-    pub async fn describe(host_name: &str, params: HashMap<String, Value>) -> ProcedureUiDescription {
-        // let image_stacks = Self::list_image_stacks(host_name).await;
-        let image_stacks: std::result::Result<Vec<String>, String> =
-            Ok(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+    async fn list_image_stacks(host_name: &str) -> Vec<String> {
+        let image_stacks = Self::fetch_image_stacks(host_name).await;
 
-        let image_stacks = if image_stacks.is_err() {
+        if image_stacks.is_err() {
             println!(
                 "Failed to fetch image stacks: {}",
                 image_stacks.err().unwrap()
@@ -41,9 +41,11 @@ impl FocusStacking {
             vec![]
         } else {
             image_stacks.unwrap()
-        };
+        }
+    }
 
-        let selected_stack = if let Some(Value::String(selected_stack)) = params.get("image_stack") {
+    async fn get_selected_image_stack(params: &HashMap<String, Value>, image_stacks: &Vec<String>) -> Option<String> {
+        if let Some(Value::String(selected_stack)) = params.get("image_stack") {
             if !image_stacks.contains(&selected_stack) {
                 println!(
                     "Selected image stack {} not found. Defaulting to first available stack.",
@@ -61,16 +63,15 @@ impl FocusStacking {
             Some(image_stacks[0].clone())
         } else {
             None
-        };
+        }
+    }
 
-        let slider_value = if let Some(slider_value) = params.get("test_slider") {
-            slider_value.as_f64().unwrap_or(50.0)
-        } else {
-            50.0
-        };
+    pub async fn describe(host_name: &str, params: HashMap<String, Value>) -> ProcedureUiDescription {
+        let image_stacks = Self::list_image_stacks(host_name).await;
+        let selected_stack = Self::get_selected_image_stack(&params, &image_stacks).await;
 
         let href = if let Some(ref stack_id) = selected_stack {
-            format!("http://{host_name}/api/z-scan/thumbnail/{stack_id}/0/150")
+            format!("http://{host_name}/api/z-scan/thumbnail/{stack_id}/0/{THUMBNAIL_SIZE}")
         } else {
             format!("")
         };
@@ -93,7 +94,7 @@ impl FocusStacking {
                 }),
                 ("output_preview".to_string(), Widget::Image {
                     display_name: "Output Preview".to_string(),
-                    href: format!("http://{host_name}/api/z-scan/thumbnail/e4a5f501-0865-4b0b-9840-98744fce5d4e/0/150"),
+                    href: format!("http://{host_name}/api/z-scan/thumbnail/e4a5f501-0865-4b0b-9840-98744fce5d4e/0/{THUMBNAIL_SIZE}"),
                     positioning: WidgetPosition {
                         row: 1,
                         column: 2,
@@ -110,19 +111,6 @@ impl FocusStacking {
                         column: 3,
                         row_span: 1,
                         column_span: 2,
-                    },
-                }),
-                ("test_slider".to_string(), Widget::Slider {
-                    display_name: "Test Slider".to_string(),
-                    min: 0.0,
-                    max: 100.0,
-                    step: 1.0,
-                    value: slider_value,
-                    positioning: WidgetPosition {
-                        row: 2,
-                        column: 1,
-                        row_span: 1,
-                        column_span: 4,
                     },
                 }),
             ]),
