@@ -8,26 +8,26 @@ use {std::format, ts_rs::TS, crate::std::borrow::ToOwned};
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(type = "number | string | boolean"))]
-pub enum InputValue {
+pub enum Value {
     Number(f64),
     Text(String),
     Boolean(bool),
 }
 
-impl Serialize for InputValue {
+impl Serialize for Value {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         match self {
-            InputValue::Number(n) => serializer.serialize_f64(*n),
-            InputValue::Text(s) => serializer.serialize_str(s),
-            InputValue::Boolean(b) => serializer.serialize_bool(*b),
+            Value::Number(n) => serializer.serialize_f64(*n),
+            Value::Text(s) => serializer.serialize_str(s),
+            Value::Boolean(b) => serializer.serialize_bool(*b),
         }
     }
 }
 
-impl<'de> Deserialize<'de> for InputValue {
+impl<'de> Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for InputValue {
         struct InputValueVisitor;
 
         impl<'de> serde::de::Visitor<'de> for InputValueVisitor {
-            type Value = InputValue;
+            type Value = Value;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a number, string, or boolean")
@@ -45,21 +45,21 @@ impl<'de> Deserialize<'de> for InputValue {
             where
                 E: serde::de::Error,
             {
-                Ok(InputValue::Number(value))
+                Ok(Value::Number(value))
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(InputValue::Text(value.to_string()))
+                Ok(Value::Text(value.to_string()))
             }
 
             fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(InputValue::Boolean(value))
+                Ok(Value::Boolean(value))
             }
         }
 

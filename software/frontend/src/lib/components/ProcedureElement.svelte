@@ -1,8 +1,14 @@
 <script lang="ts">
 	import type { Element } from '$lib/bindings/Element';
 	import type { ElementPositioning } from '$lib/bindings/ElementPositioning';
+	import type { Value } from '$lib/bindings/Value';
 
-	let { element }: { element: Element } = $props();
+	let {
+		elementId,
+		element,
+		updateUi
+	}: { elementId: string; element: Element; updateUi: (key: string, value: Value) => void } =
+		$props();
 
 	let pos: ElementPositioning = $state({
 		row: 0,
@@ -25,18 +31,16 @@
 			`grid-row: ${pos.row} / span ${pos.row_span};`
 		);
 	};
-
-	const onChange = (event: Event) => {
-		const select = event.target as HTMLSelectElement;
-		console.log('Selected value:', select.value);
-	};
 </script>
 
 <div class="mb-2" style={makeWrapperStype(pos)}>
 	{#if 'Select' in element}
 		{@const obj = element.Select}
 		<p class="mb-2">{obj.display_name} ({obj.positioning.column})</p>
-		<select class="select select-ghost w-full" onchange={onChange}>
+		<select
+			class="select select-ghost w-full"
+			onchange={(e) => updateUi(elementId, (e.target as HTMLSelectElement).value)}
+		>
 			{#each obj.options as option}
 				<option>{option}</option>
 			{/each}

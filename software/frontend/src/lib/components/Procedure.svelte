@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Element } from '$lib/bindings/Element';
 	import type { ProcedureUi } from '$lib/bindings/ProcedureUi';
+	import type { Value } from '$lib/bindings/Value';
+	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
 	import Live from '$lib/icons/Live.svelte';
 	import type { State } from '$lib/state';
 	import ProcedureElement from './ProcedureElement.svelte';
@@ -12,21 +14,32 @@
 	}: { compute_node_id: string; procedure: ProcedureUi; appState: State } = $props();
 
 	const listElementsForProcedure = () => {
-		let input_list: { input_id: string; element: Element }[] = [];
+		let input_list: { element_id: string; element: Element }[] = [];
 
-		for (const [input_id, element_entry] of Object.entries(procedure.elements)) {
+		for (const [element_id, element_entry] of Object.entries(procedure.elements)) {
 			if (element_entry !== undefined) {
-				input_list.push({ input_id, element: element_entry });
+				input_list.push({ element_id, element: element_entry });
 			}
 		}
 
 		return input_list;
 	};
 
-	let input_elements: HTMLInputElement[] = [];
+	let ui_values: Record<string, Value> = {};
 
-	const updateUiFromInputs = () => {
-		// Placeholder for future functionality to update UI based on input changes
+	const updateUi = (key: string, value: Value) => {
+		ui_values[key] = value;
+
+		let msg: WebSocketMessage = {
+			with_procedure_params: {
+				procedure_name: procedure.name,
+				source_uuid: null,
+				destination_uuid: compute_node_id,
+				params: ui_values
+			}
+		};
+
+		appState.ws?.send(JSON.stringify(msg));
 	};
 </script>
 
@@ -41,8 +54,8 @@
 		</div>
 		<div class="divider"></div>
 		<div class="grid grid-cols-{procedure.columns} gap-4">
-			{#each listElementsForProcedure() as { input_id, element }}
-				<ProcedureElement {element} />
+			{#each listElementsForProcedure() as { element_id: elementId, element }}
+				<ProcedureElement elementId={elementId} {element} {updateUi} />
 			{/each}
 		</div>
 	</div>

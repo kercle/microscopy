@@ -111,20 +111,20 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
         }
-        WebSocketMessage::DescribeProcedureWithInputs {
+        WebSocketMessage::WithProcedureParams {
             procedure_name,
             destination_uuid,
-            input_values,
+            params,
             ..
         } => {
-            conn.channels.inter_client_relay.send(
-                WebSocketMessage::DescribeProcedureWithInputs {
+            conn.channels
+                .inter_client_relay
+                .send(WebSocketMessage::WithProcedureParams {
                     source_uuid: Some(conn.role.get_id()?),
                     procedure_name,
                     destination_uuid,
-                    input_values,
-                },
-            )?;
+                    params,
+                })?;
         }
         WebSocketMessage::ProcedureDescription {
             procedure_name,
@@ -215,8 +215,8 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                 };
 
                 match &msg {
-                    WebSocketMessage::DescribeProcedureWithInputs { destination_uuid, .. } |
-                    WebSocketMessage::ProcedureDescription { destination_uuid, .. } => {
+                    WebSocketMessage::ProcedureDescription { destination_uuid, .. } |
+                    WebSocketMessage::WithProcedureParams { destination_uuid, .. } => {
                         if self_id != *destination_uuid {
                             continue; // Not intended for this client
                         }

@@ -4,15 +4,15 @@ use std::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ws::compute_node::ProcedureUi;
+use crate::ws::{compute_node::ProcedureUi, value::Value};
 
 #[cfg(feature = "ts")]
 use {std::format, std::string::ToString, ts_rs::TS};
 
 pub mod compute_node;
-pub mod input;
 pub mod logs;
 pub mod parameters;
+pub mod value;
 
 use compute_node::{ComputeNode, ComputeNodeCapabilities};
 use logs::LogEntry;
@@ -29,11 +29,11 @@ pub enum WebSocketMessage {
 
     UpdateParameters(Parameters),
     ComputeNodes(Vec<ComputeNode>),
-    DescribeProcedureWithInputs {
+    WithProcedureParams {
         procedure_name: String,
         source_uuid: Option<String>,
         destination_uuid: String,
-        input_values: HashMap<String, input::InputValue>,
+        params: HashMap<String, Value>,
     },
     ProcedureDescription {
         procedure_name: String,

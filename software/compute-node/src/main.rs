@@ -1,9 +1,11 @@
 use std::{collections::HashMap, env};
 
-use futures_util::{SinkExt, StreamExt};
 use common::ws::compute_node::ComputeNodeCapabilities;
+use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
+
+use crate::focus_stacking::FocusStackingParams;
 
 mod focus_stacking;
 
@@ -34,6 +36,7 @@ async fn receiver_thread(
                 break;
             }
             msg = read.next() => {
+                println!("Received a message");
                 if let Some(Ok(msg)) = msg {
                     process_message(msg).await;
                 } else {
@@ -55,7 +58,8 @@ async fn sender_thread(
     let capabilities = ComputeNodeCapabilities {
         procedures: HashMap::from([(
             "focus_stacking".to_string(),
-            focus_stacking::FocusStacking::describe(host_name).await,
+            focus_stacking::FocusStacking::describe(host_name, FocusStackingParams::default())
+                .await,
         )]),
     };
 

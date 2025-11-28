@@ -10,28 +10,6 @@ use {std::format, std::string::ToString, ts_rs::TS};
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Input {
-    Selection {
-        display_name: String,
-        options: Vec<String>,
-        value: String,
-    },
-    ImagePreview {
-        display_name: String,
-        href: String,
-    },
-}
-
-#[cfg_attr(feature = "ts", derive(TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Output {
-    Image { display_name: String },
-}
-
-#[cfg_attr(feature = "ts", derive(TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElementPositioning {
     pub row: u32,
     pub column: u32,
@@ -64,6 +42,7 @@ pub enum Element {
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcedureUi {
+    pub name: String,
     pub display_name: String,
     pub description: String,
     pub columns: u32,
