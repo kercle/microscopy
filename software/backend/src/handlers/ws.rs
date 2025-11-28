@@ -130,6 +130,7 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             procedure_name,
             destination_uuid,
             procedure,
+            ..
         } => {
             conn.channels
                 .inter_client_relay
@@ -137,6 +138,7 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
                     procedure_name,
                     destination_uuid,
                     procedure,
+                    source_uuid: Some(conn.role.get_id()?),
                 })?;
         }
         WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodes(_) => {

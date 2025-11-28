@@ -7,8 +7,22 @@
 	let { appState = $bindable<State>() } = $props();
 	let compute_nodes: ComputeNode[] = $state([]);
 
-	export const updateComputeNodes = (new_compute_nodes: ComputeNode[]) => {
+	export const initAllComputeNodes = (new_compute_nodes: ComputeNode[]) => {
 		compute_nodes = new_compute_nodes;
+	};
+
+	export const updateComputeNode = (node_id: string, procedure_ui: ProcedureUi) => {
+		const index = compute_nodes.findIndex((node) => node.node_id === node_id);
+
+		if (index == -1) {
+			return;
+		}
+
+		console.log('Updating procedure', procedure_ui.name, 'to', procedure_ui);
+
+		if (procedure_ui.name in compute_nodes[index].capabilities.procedures) {
+			compute_nodes[index].capabilities.procedures[procedure_ui.name] = procedure_ui;
+		}
 	};
 
 	const listProcedures = () => {
@@ -36,10 +50,6 @@
 
 <div class="flex flex-col gap-2">
 	{#each listProcedures() as entry}
-		<Procedure
-			compute_node_id={entry.compute_node_uuid}
-			procedure={entry.procedure}
-			{appState}
-		/>
+		<Procedure compute_node_id={entry.compute_node_uuid} procedure={entry.procedure} {appState} />
 	{/each}
 </div>

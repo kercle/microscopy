@@ -1,18 +1,74 @@
 use std::{collections::HashMap, env};
 
-use common::ws::compute_node::ComputeNodeCapabilities;
+use common::ws::{WebSocketMessage, compute_node::ComputeNodeCapabilities};
 use futures_util::{SinkExt, StreamExt};
+use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 
-use crate::focus_stacking::FocusStackingParams;
-
 mod focus_stacking;
 
-async fn process_message(msg: Message) {
+async fn react_to_focus_stacking_request(
+    sender_tx: &mpsc::UnboundedSender<Message>,
+    host_name: &str,
+    source_uuid: String,
+    params: HashMap<String, common::ws::value::Value>,
+) {
+    let desc = focus_stacking::FocusStacking::describe(host_name, params).await;
+    let payload = serde_json::to_string(&WebSocketMessage::ProcedureDescription {
+        procedure_name: "focus_stacking".to_string(),
+        source_uuid: None,
+        destination_uuid: source_uuid,
+        procedure: desc,
+    });
+
+    if let Ok(payload) = payload {
+        let _ = sender_tx.send(Message::Text(payload.into()));
+    }
+}
+
+async fn process_websocket_message(
+    msg: WebSocketMessage,
+    host_name: &str,
+    sender_tx: &mpsc::UnboundedSender<Message>,
+) {
+    match msg {
+        WebSocketMessage::WithProcedureParams {
+            procedure_name,
+            source_uuid,
+            destination_uuid: _,
+            params,
+            ..
+        } => {
+            if source_uuid.is_none() {
+                return;
+            }
+
+            if procedure_name == "focus_stacking" && source_uuid.is_some() {
+                react_to_focus_stacking_request(sender_tx, host_name, source_uuid.unwrap(), params)
+                    .await;
+            }
+        }
+        _ => {
+            // Ignore other message types for now
+        }
+    }
+}
+
+async fn process_message(
+    msg: Message,
+    host_name: &str,
+    sender_tx: &mpsc::UnboundedSender<Message>,
+) {
     match msg {
         Message::Text(text) => {
             println!("Received text message: {}", text);
+
+            if let Ok(ws_msg) = serde_json::from_str::<WebSocketMessage>(&text) {
+                process_websocket_message(ws_msg, host_name, sender_tx).await;
+            } else {
+                println!("Failed to parse WebSocket message");
+            }
         }
         Message::Binary(bin) => {
             println!("Received binary message: {:?}", bin);
@@ -27,7 +83,9 @@ async fn process_message(msg: Message) {
 }
 
 async fn receiver_thread(
+    host_name: &str,
     cancellation_token: CancellationToken,
+    sender_tx: mpsc::UnboundedSender<Message>,
     mut read: impl StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
 ) {
     loop {
@@ -38,7 +96,7 @@ async fn receiver_thread(
             msg = read.next() => {
                 println!("Received a message");
                 if let Some(Ok(msg)) = msg {
-                    process_message(msg).await;
+                    process_message(msg, host_name, &sender_tx).await;
                 } else {
                     println!("Connection closed or error occurred");
                     break;
@@ -53,13 +111,13 @@ async fn receiver_thread(
 async fn sender_thread(
     host_name: &str,
     cancellation_token: CancellationToken,
+    mut sender_rx: mpsc::UnboundedReceiver<Message>,
     mut write: impl SinkExt<Message> + Unpin,
 ) {
     let capabilities = ComputeNodeCapabilities {
         procedures: HashMap::from([(
             "focus_stacking".to_string(),
-            focus_stacking::FocusStacking::describe(host_name, FocusStackingParams::default())
-                .await,
+            focus_stacking::FocusStacking::describe(host_name, HashMap::new()).await,
         )]),
     };
 
@@ -74,7 +132,9 @@ async fn sender_thread(
             _ = cancellation_token.cancelled() => {
                 break;
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {}
+            Some(msg) = sender_rx.recv() => {
+                let _ = write.send(msg).await;
+            }
         }
     }
 
@@ -103,6 +163,7 @@ async fn main() {
         .expect("Failed to connect");
     println!("WebSocket handshake has been successfully completed");
 
+    let (sender_tx, sender_rx) = mpsc::unbounded_channel();
     let (write, read) = ws_stream.split();
 
     let cancellation_token = CancellationToken::new();
@@ -112,9 +173,9 @@ async fn main() {
     tokio::spawn(ctrlc_handler(cancellation_token));
 
     tokio::select! {
-        _ = receiver_thread(recv_cancellation_token, read) => {
+        _ = receiver_thread(&host_name, recv_cancellation_token, sender_tx, read) => {
         }
-        _ = sender_thread(&host_name, send_cancellation_token, write) => {
+        _ = sender_thread(&host_name, send_cancellation_token, sender_rx, write) => {
         }
     }
 }

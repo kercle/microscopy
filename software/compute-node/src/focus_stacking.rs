@@ -1,15 +1,11 @@
 use std::collections::HashMap;
 
 use anyhow::{Result, bail};
+use common::ws::value::Value;
 use reqwest;
 
 use common::rest::z_scan::ZScanMetadata;
 use common::ws::compute_node::{Element, ElementPositioning, ProcedureUi};
-
-#[derive(Debug, Clone, Default)]
-pub struct FocusStackingParams {
-    pub image_stack_selection: Option<String>,
-}
 
 pub struct FocusStacking {}
 
@@ -18,7 +14,7 @@ impl FocusStacking {
         FocusStacking {}
     }
 
-    async fn list_image_stacks(host_name: &str) -> Result<Vec<String>> {
+    async fn _list_image_stacks(host_name: &str) -> Result<Vec<String>> {
         // request to microscope_url to get actual image stacks would go here
         let url = format!("http://{host_name}/api/z-scan/list");
         let response = reqwest::get(&url).await?;
@@ -32,8 +28,10 @@ impl FocusStacking {
         Ok(response.into_iter().map(|metadata| metadata.uuid).collect())
     }
 
-    pub async fn describe(host_name: &str, params: FocusStackingParams) -> ProcedureUi {
-        let image_stacks = Self::list_image_stacks(host_name).await;
+    pub async fn describe(host_name: &str, params: HashMap<String, Value>) -> ProcedureUi {
+        // let image_stacks = Self::list_image_stacks(host_name).await;
+        let image_stacks: std::result::Result<Vec<String>, String> =
+            Ok(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
 
         let image_stacks = if image_stacks.is_err() {
             println!(
@@ -45,7 +43,7 @@ impl FocusStacking {
             image_stacks.unwrap()
         };
 
-        let value = if let Some(selected_stack) = params.image_stack_selection {
+        let value = if let Some(Value::String(selected_stack)) = params.get("image_stack") {
             if !image_stacks.contains(&selected_stack) {
                 println!(
                     "Selected image stack {} not found. Defaulting to first available stack.",
@@ -53,7 +51,7 @@ impl FocusStacking {
                 );
             }
 
-            Some(selected_stack)
+            Some(selected_stack.clone())
         } else if !image_stacks.is_empty() {
             println!(
                 "No image stack selected. Defaulting to first available stack {}.",
@@ -99,7 +97,7 @@ impl FocusStacking {
                 }),
                 ("image_stack".to_string(), Element::Select {
                     display_name: "Image stack".to_string(),
-                    options: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+                    options: image_stacks,
                     value: value.unwrap_or_default(),
                     positioning: ElementPositioning {
                         row: 1,

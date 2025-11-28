@@ -38,7 +38,18 @@
 			} else if ('update_parameters' in msg) {
 				camera_controls_ref.update(msg.update_parameters);
 			} else if ('compute_nodes' in msg) {
-				processing_tab_ref.updateComputeNodes(msg.compute_nodes);
+				console.log('Received compute nodes update:', msg.compute_nodes);
+				processing_tab_ref.initAllComputeNodes(msg.compute_nodes);
+			} else if ('procedure_description' in msg) {
+				console.log('Received procedure description:', msg.procedure_description);
+
+				const node_id = msg.procedure_description.source_uuid;
+
+				if (node_id) {
+					processing_tab_ref.updateComputeNode(node_id, msg.procedure_description.procedure);
+				}
+			} else {
+				console.warn('Unhandled WebSocket message:', msg);
 			}
 		});
 		return () => appState.ws?.close();

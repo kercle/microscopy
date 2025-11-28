@@ -12,7 +12,7 @@ pub enum Value {
     UnsignedInteger(u64),
     Integer(i64),
     Float(f64),
-    Text(String),
+    String(String),
     Boolean(bool),
 }
 
@@ -25,7 +25,7 @@ impl Serialize for Value {
             Value::UnsignedInteger(n) => serializer.serialize_u64(*n),
             Value::Integer(n) => serializer.serialize_i64(*n),
             Value::Float(n) => serializer.serialize_f64(*n),
-            Value::Text(s) => serializer.serialize_str(s),
+            Value::String(s) => serializer.serialize_str(s),
             Value::Boolean(b) => serializer.serialize_bool(*b),
         }
     }
@@ -70,7 +70,7 @@ impl<'de> Deserialize<'de> for Value {
             where
                 E: serde::de::Error,
             {
-                Ok(Value::Text(value.to_string()))
+                Ok(Value::String(value.to_string()))
             }
 
             fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>

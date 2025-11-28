@@ -37,6 +37,7 @@ pub enum WebSocketMessage {
     },
     ProcedureDescription {
         procedure_name: String,
+        source_uuid: Option<String>,
         destination_uuid: String,
         procedure: ProcedureUi,
     },
