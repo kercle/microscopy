@@ -43,7 +43,7 @@ impl FocusStacking {
             image_stacks.unwrap()
         };
 
-        let value = if let Some(Value::String(selected_stack)) = params.get("image_stack") {
+        let selected_stack = if let Some(Value::String(selected_stack)) = params.get("image_stack") {
             if !image_stacks.contains(&selected_stack) {
                 println!(
                     "Selected image stack {} not found. Defaulting to first available stack.",
@@ -63,7 +63,13 @@ impl FocusStacking {
             None
         };
 
-        let href = if let Some(ref stack_id) = value {
+        let slider_value = if let Some(slider_value) = params.get("test_slider") {
+            slider_value.as_f64().unwrap_or(50.0)
+        } else {
+            50.0
+        };
+
+        let href = if let Some(ref stack_id) = selected_stack {
             format!("http://{host_name}/api/z-scan/thumbnail/{stack_id}/0/150")
         } else {
             format!("")
@@ -98,7 +104,7 @@ impl FocusStacking {
                 ("image_stack".to_string(), Element::Select {
                     display_name: "Image stack".to_string(),
                     options: image_stacks,
-                    value: value.unwrap_or_default(),
+                    value: selected_stack.unwrap_or_default(),
                     positioning: ElementPositioning {
                         row: 1,
                         column: 3,
@@ -111,7 +117,7 @@ impl FocusStacking {
                     min: 0.0,
                     max: 100.0,
                     step: 1.0,
-                    value: 50.0,
+                    value: slider_value,
                     positioning: ElementPositioning {
                         row: 2,
                         column: 1,

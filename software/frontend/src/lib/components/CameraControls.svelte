@@ -9,7 +9,6 @@
 	let camera_properties: CameraProperties = $state({});
 
 	export const update = (data: any) => {
-		console.log('CameraControls update', data);
 		if (data.camera_properties) {
 			camera_properties = { ...camera_properties, ...data.camera_properties };
 		}

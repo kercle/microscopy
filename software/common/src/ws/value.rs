@@ -16,6 +16,17 @@ pub enum Value {
     Boolean(bool),
 }
 
+impl Value {
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Value::UnsignedInteger(n) => Some(*n as f64),
+            Value::Integer(n) => Some(*n as f64),
+            Value::Float(n) => Some(*n),
+            _ => None,
+        }
+    }
+}
+
 impl Serialize for Value {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

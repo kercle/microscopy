@@ -5,24 +5,21 @@
 	import Procedure from './Procedure.svelte';
 
 	let { appState = $bindable<State>() } = $props();
+
 	let compute_nodes: ComputeNode[] = $state([]);
+	let procedure_components: Record<string, Procedure> = $state({});
 
 	export const initAllComputeNodes = (new_compute_nodes: ComputeNode[]) => {
 		compute_nodes = new_compute_nodes;
 	};
 
 	export const updateComputeNode = (node_id: string, procedure_ui: ProcedureUi) => {
-		const index = compute_nodes.findIndex((node) => node.node_id === node_id);
+		const id = getProcedureId(node_id, procedure_ui.name);
+		procedure_components[id]?.updateUiFromBackend(procedure_ui);
+	};
 
-		if (index == -1) {
-			return;
-		}
-
-		console.log('Updating procedure', procedure_ui.name, 'to', procedure_ui);
-
-		if (procedure_ui.name in compute_nodes[index].capabilities.procedures) {
-			compute_nodes[index].capabilities.procedures[procedure_ui.name] = procedure_ui;
-		}
+	const getProcedureId = (compute_node_uuid: string, procedure_name: string) => {
+		return `${compute_node_uuid}-${procedure_name}`;
 	};
 
 	const listProcedures = () => {
@@ -50,6 +47,12 @@
 
 <div class="flex flex-col gap-2">
 	{#each listProcedures() as entry}
-		<Procedure compute_node_id={entry.compute_node_uuid} procedure={entry.procedure} {appState} />
+		{@const id = getProcedureId(entry.compute_node_uuid, entry.procedure.name)}
+		<Procedure
+			compute_node_id={entry.compute_node_uuid}
+			procedure={entry.procedure}
+			{appState}
+			bind:this={procedure_components[id]}
+		/>
 	{/each}
 </div>

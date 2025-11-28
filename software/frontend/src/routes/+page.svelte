@@ -41,8 +41,6 @@
 				console.log('Received compute nodes update:', msg.compute_nodes);
 				processing_tab_ref.initAllComputeNodes(msg.compute_nodes);
 			} else if ('procedure_description' in msg) {
-				console.log('Received procedure description:', msg.procedure_description);
-
 				const node_id = msg.procedure_description.source_uuid;
 
 				if (node_id) {
