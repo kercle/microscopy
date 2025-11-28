@@ -5,7 +5,7 @@ use common::ws::value::Value;
 use reqwest;
 
 use common::rest::z_scan::ZScanMetadata;
-use common::ws::compute_node::{Element, ElementPositioning, ProcedureUi};
+use common::ws::compute_node::{Widget, WidgetPosition, ProcedureUiDescription};
 
 pub struct FocusStacking {}
 
@@ -28,7 +28,7 @@ impl FocusStacking {
         Ok(response.into_iter().map(|metadata| metadata.uuid).collect())
     }
 
-    pub async fn describe(host_name: &str, params: HashMap<String, Value>) -> ProcedureUi {
+    pub async fn describe(host_name: &str, params: HashMap<String, Value>) -> ProcedureUiDescription {
         // let image_stacks = Self::list_image_stacks(host_name).await;
         let image_stacks: std::result::Result<Vec<String>, String> =
             Ok(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
@@ -75,50 +75,50 @@ impl FocusStacking {
             format!("")
         };
 
-        ProcedureUi {
+        ProcedureUiDescription {
             name: "focus_stacking".to_string(),
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
             columns: 4,
             elements: HashMap::from([
-                ("stack_preview".to_string(), Element::Image {
+                ("stack_preview".to_string(), Widget::Image {
                     display_name: "Stack Preview".to_string(),
                     href,
-                    positioning: ElementPositioning {
+                    positioning: WidgetPosition {
                         row: 1,
                         column: 1,
                         row_span: 1,
                         column_span: 1,
                     },
                 }),
-                ("output_preview".to_string(), Element::Image {
+                ("output_preview".to_string(), Widget::Image {
                     display_name: "Output Preview".to_string(),
                     href: format!("http://{host_name}/api/z-scan/thumbnail/e4a5f501-0865-4b0b-9840-98744fce5d4e/0/150"),
-                    positioning: ElementPositioning {
+                    positioning: WidgetPosition {
                         row: 1,
                         column: 2,
                         row_span: 1,
                         column_span: 1,
                     },
                 }),
-                ("image_stack".to_string(), Element::Select {
+                ("image_stack".to_string(), Widget::Select {
                     display_name: "Image stack".to_string(),
                     options: image_stacks,
                     value: selected_stack.unwrap_or_default(),
-                    positioning: ElementPositioning {
+                    positioning: WidgetPosition {
                         row: 1,
                         column: 3,
                         row_span: 1,
                         column_span: 2,
                     },
                 }),
-                ("test_slider".to_string(), Element::Slider {
+                ("test_slider".to_string(), Widget::Slider {
                     display_name: "Test Slider".to_string(),
                     min: 0.0,
                     max: 100.0,
                     step: 1.0,
                     value: slider_value,
-                    positioning: ElementPositioning {
+                    positioning: WidgetPosition {
                         row: 2,
                         column: 1,
                         row_span: 1,

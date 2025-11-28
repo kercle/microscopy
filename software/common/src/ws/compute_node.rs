@@ -10,7 +10,7 @@ use {std::format, std::string::ToString, ts_rs::TS};
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElementPositioning {
+pub struct WidgetPosition {
     pub row: u32,
     pub column: u32,
     pub row_span: u32,
@@ -21,21 +21,21 @@ pub struct ElementPositioning {
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum Element {
+pub enum Widget {
     Image {
         display_name: String,
         href: String,
-        positioning: ElementPositioning,
+        positioning: WidgetPosition,
     },
     Select {
         display_name: String,
         options: Vec<String>,
         value: String,
-        positioning: ElementPositioning,
+        positioning: WidgetPosition,
     },
     Button {
         display_name: String,
-        positioning: ElementPositioning,
+        positioning: WidgetPosition,
     },
     Slider {
         display_name: String,
@@ -43,26 +43,26 @@ pub enum Element {
         max: f64,
         step: f64,
         value: f64,
-        positioning: ElementPositioning,
+        positioning: WidgetPosition,
     },
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcedureUi {
+pub struct ProcedureUiDescription {
     pub name: String,
     pub display_name: String,
     pub description: String,
     pub columns: u32,
-    pub elements: HashMap<String, Element>,
+    pub elements: HashMap<String, Widget>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputeNodeCapabilities {
-    pub procedures: HashMap<String, ProcedureUi>,
+    pub procedures: HashMap<String, ProcedureUiDescription>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]

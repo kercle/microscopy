@@ -4,7 +4,7 @@ use std::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ws::{compute_node::ProcedureUi, value::Value};
+use crate::ws::{compute_node::ProcedureUiDescription, value::Value};
 
 #[cfg(feature = "ts")]
 use {std::format, std::string::ToString, ts_rs::TS};
@@ -39,7 +39,7 @@ pub enum WebSocketMessage {
         procedure_name: String,
         source_uuid: Option<String>,
         destination_uuid: String,
-        procedure: ProcedureUi,
+        procedure: ProcedureUiDescription,
     },
 
     Logs(Vec<LogEntry>),

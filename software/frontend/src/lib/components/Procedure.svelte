@@ -1,25 +1,25 @@
 <script lang="ts">
-	import type { Element } from '$lib/bindings/Element';
-	import type { ProcedureUi } from '$lib/bindings/ProcedureUi';
+	import type { Widget } from '$lib/bindings/Widget';
+	import type { ProcedureUiDescription } from '$lib/bindings/ProcedureUiDescription';
 	import type { Value } from '$lib/bindings/Value';
 	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
 	import Live from '$lib/icons/Live.svelte';
 	import type { State } from '$lib/state';
-	import ProcedureElement from './ProcedureElement.svelte';
+	import ProcedureWidget from './ProcedureWidget.svelte';
 
 	let {
 		compute_node_id,
 		procedure,
 		appState = $bindable<State>()
-	}: { compute_node_id: string; procedure: ProcedureUi; appState: State } = $props();
+	}: { compute_node_id: string; procedure: ProcedureUiDescription; appState: State } = $props();
 
 	let procedure_title: HTMLHeadingElement | null = $state(null);
 	let procedure_progress: HTMLProgressElement | null = $state(null);
-	let procedure_elements: Record<string, ProcedureElement> = $state({});
+	let procedure_elements: Record<string, ProcedureWidget> = $state({});
 
 	let ui_values: Record<string, Value> = {};
 
-	export const updateUiFromBackend = (procedure_ui: ProcedureUi) => {
+	export const updateUiFromBackend = (procedure_ui: ProcedureUiDescription) => {
 		procedure_title!.textContent = procedure_ui.display_name;
 
 		for (const [element_id, element_entry] of Object.entries(procedure_ui.elements)) {
@@ -34,7 +34,7 @@
 	};
 
 	const listElementsForProcedure = () => {
-		let input_list: { element_id: string; element: Element }[] = [];
+		let input_list: { element_id: string; element: Widget }[] = [];
 
 		for (const [element_id, element_entry] of Object.entries(procedure.elements)) {
 			if (element_entry !== undefined) {
@@ -76,7 +76,7 @@
 		<div class="divider"></div>
 		<div class="grid grid-cols-{procedure.columns} gap-4">
 			{#each listElementsForProcedure() as { element_id: elementId, element }}
-				<ProcedureElement
+				<ProcedureWidget
 					{elementId}
 					{element}
 					{fetchUiFromParamChange}

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Element } from '$lib/bindings/Element';
-	import type { ElementPositioning } from '$lib/bindings/ElementPositioning';
+	import type { Widget } from '$lib/bindings/Widget';
+	import type { WidgetPosition } from '$lib/bindings/WidgetPosition';
 	import type { Value } from '$lib/bindings/Value';
 
 	let {
@@ -9,13 +9,13 @@
 		fetchUiFromParamChange
 	}: {
 		elementId: string;
-		element: Element;
+		element: Widget;
 		fetchUiFromParamChange: (key: string, value: Value) => void;
 	} = $props();
 
 	let html_element: HTMLElement | null = $state(null);
 
-	export const update = (new_element: Element) => {
+	export const update = (new_element: Widget) => {
 		if (element.type !== new_element.type) {
 			console.warn(
 				`Element type changed from ${element.type} to ${new_element.type}, which is not supported.`
@@ -44,7 +44,7 @@
 		}
 	};
 
-	const makeWrapperStype = (pos: ElementPositioning) => {
+	const makeWrapperStype = (pos: WidgetPosition) => {
 		return (
 			`grid-column: ${pos.column} / span ${pos.column_span};` +
 			`grid-row: ${pos.row} / span ${pos.row_span};`
