@@ -10,7 +10,7 @@ use tokio::sync::watch;
 
 use crate::task::Task;
 
-const THUMBNAIL_SIZE: u32 = 400;
+const THUMBNAIL_SIZE: u32 = 250;
 
 #[derive(Clone)]
 pub struct FocusStacking {
@@ -114,12 +114,12 @@ impl Task for FocusStacking {
             name: task_name,
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
-            columns: 4,
+            columns: 2,
             progress: self.get_progress().await,
             locked: false,
             elements: HashMap::from([
                 ("stack_preview".to_string(), Widget::Image {
-                    display_name: "Stack Preview".to_string(),
+                    display_name: "".to_string(),
                     href,
                     positioning: WidgetPosition {
                         row: 1,
@@ -128,25 +128,15 @@ impl Task for FocusStacking {
                         column_span: 1,
                     },
                 }),
-                ("output_preview".to_string(), Widget::Image {
-                    display_name: "Output Preview".to_string(),
-                    href: format!("http://{host_name}/api/z-scan/thumbnail/e4a5f501-0865-4b0b-9840-98744fce5d4e/0/{THUMBNAIL_SIZE}"),
+                ("image_stack".to_string(), Widget::Select {
+                    display_name: "".to_string(),
+                    options: image_stacks,
+                    value: selected_stack.unwrap_or_default(),
                     positioning: WidgetPosition {
                         row: 1,
                         column: 2,
                         row_span: 1,
                         column_span: 1,
-                    },
-                }),
-                ("image_stack".to_string(), Widget::Select {
-                    display_name: "Image stack".to_string(),
-                    options: image_stacks,
-                    value: selected_stack.unwrap_or_default(),
-                    positioning: WidgetPosition {
-                        row: 1,
-                        column: 3,
-                        row_span: 1,
-                        column_span: 2,
                     },
                 }),
             ]),
