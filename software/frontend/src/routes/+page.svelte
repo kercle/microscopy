@@ -125,8 +125,10 @@
 				<Processing />
 				<span class="ml-2">Tasks</span>
 			</label>
-			<div class="tab-content bg-base-100 p-6">
-				<TasksTab bind:this={processing_tab_ref} {appState} />
+			<div class="tab-content bg-base-100">
+				<div class="h-[calc(100%-6.2rem)] overflow-y-auto p-6">
+					<TasksTab bind:this={processing_tab_ref} {appState} />
+				</div>
 			</div>
 
 			<!-- Tab 4: Journal -->
