@@ -13,7 +13,7 @@
 	import SampleScans from '$lib/components/SampleScans.svelte';
 	import Processing from '$lib/icons/Processing.svelte';
 	import type { WebSocketMessage } from '$lib/bindings/WebSocketMessage';
-	import ProcessingTab from '$lib/components/ProcessingTab.svelte';
+	import TasksTab from '$lib/components/TasksTab.svelte';
 	import { onMount } from 'svelte';
 
 	let appState: State = $state({
@@ -23,7 +23,7 @@
 
 	let camera_controls_ref: CameraControls;
 	let logs_journal_ref: LogsJournal;
-	let processing_tab_ref: ProcessingTab;
+	let processing_tab_ref: TasksTab;
 
 	$effect(() => {
 		appState.ws = connect((event: MessageEvent) => {
@@ -40,11 +40,11 @@
 			} else if ('compute_nodes' in msg) {
 				console.log('Received compute nodes update:', msg.compute_nodes);
 				processing_tab_ref.initAllComputeNodes(msg.compute_nodes);
-			} else if ('procedure_description' in msg) {
-				const node_id = msg.procedure_description.source_uuid;
+			} else if ('task_description' in msg) {
+				const node_id = msg.task_description.source_uuid;
 
 				if (node_id) {
-					processing_tab_ref.updateComputeNode(node_id, msg.procedure_description.procedure);
+					processing_tab_ref.updateComputeNode(node_id, msg.task_description.ui_description);
 				}
 			} else {
 				console.warn('Unhandled WebSocket message:', msg);
@@ -117,10 +117,10 @@
 					onchange={() => updateAnchor('processing')}
 				/>
 				<Processing />
-				<span class="ml-2">Processing</span>
+				<span class="ml-2">Tasks</span>
 			</label>
 			<div class="tab-content bg-base-100 p-6">
-				<ProcessingTab bind:this={processing_tab_ref} {appState} />
+				<TasksTab bind:this={processing_tab_ref} {appState} />
 			</div>
 
 			<!-- Tab 4: Journal -->

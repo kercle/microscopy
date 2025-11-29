@@ -59,6 +59,18 @@
 
 		appState.ws?.send(JSON.stringify(msg));
 	};
+
+	const startTask = () => {
+		let msg: WebSocketMessage = {
+			start_task: {
+				task_name: task.name,
+				compute_node_uuid: compute_node_id,
+				params: ui_values
+			}
+		};
+
+		appState.ws?.send(JSON.stringify(msg));
+	};
 </script>
 
 <div class="card bg-base-200 w-full shadow-sm">
@@ -69,7 +81,7 @@
 					{task.display_name}
 				</h2>
 				<progress class="progress mx-5" value="40" max="100" bind:this={task_progress}></progress>
-				<button class="btn btn-ghost text-primary"><Live /></button>
+				<button class="btn btn-ghost text-primary" onclick={startTask}><Live /></button>
 			</div>
 		</div>
 		<div class="divider"></div>
