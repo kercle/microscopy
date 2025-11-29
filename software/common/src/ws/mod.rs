@@ -46,6 +46,11 @@ pub enum WebSocketMessage {
         task_name: String,
         params: HashMap<String, Value>,
     },
+    TaskProgressUpdate {
+        compute_node_uuid: Option<String>,
+        task_name: String,
+        progress: f32,
+    },
 
     Logs(Vec<LogEntry>),
 }

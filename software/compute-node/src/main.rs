@@ -218,8 +218,12 @@ async fn sender_thread(
                 }
 
                 let (task_name, progress) = msg.unwrap();
-                println!("Progress update: {task_name} - {progress}" );
-                // println!("Sending progress update for task: {}, progress: {}", task_name, progress);
+                let payload = serde_json::to_string(&common::ws::WebSocketMessage::TaskProgressUpdate {
+                    compute_node_uuid: None,
+                    task_name,
+                    progress,
+                }).unwrap();
+                let _ = write.send(Message::Text(payload.into())).await;
             }
         }
     }

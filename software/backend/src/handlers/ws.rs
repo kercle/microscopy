@@ -159,6 +159,24 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
                     params,
                 })?;
         }
+        WebSocketMessage::TaskProgressUpdate {
+            task_name,
+            progress,
+            ..
+        } => {
+            if !matches!(conn.role, PeerRole::ComputeNode(_)) {
+                error!("Only compute nodes can send task progress updates.");
+                return Ok(());
+            }
+
+            conn.channels
+                .inter_client_relay
+                .send(WebSocketMessage::TaskProgressUpdate {
+                    compute_node_uuid: Some(conn.role.get_id()?),
+                    task_name,
+                    progress,
+                })?;
+        }
         WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodes(_) => {
             // message to client only; ignore
         }
@@ -245,6 +263,11 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                     WebSocketMessage::StartTask { compute_node_uuid, .. } => {
                         if self_id != *compute_node_uuid {
                             continue; // Not intended for this client
+                        }
+                    }
+                    WebSocketMessage::TaskProgressUpdate { .. } => {
+                        if !matches!(conn.role, PeerRole::UserClient(_)) {
+                            continue; // Intendent for user clients only
                         }
                     }
                     _ => {
