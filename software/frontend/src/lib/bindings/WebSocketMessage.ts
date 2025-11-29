@@ -3,7 +3,7 @@ import type { ComputeNode } from "./ComputeNode";
 import type { ComputeNodeCapabilities } from "./ComputeNodeCapabilities";
 import type { LogEntry } from "./LogEntry";
 import type { Parameters } from "./Parameters";
-import type { ProcedureUiDescription } from "./ProcedureUiDescription";
+import type { TaskUiDescription } from "./TaskUiDescription";
 import type { Value } from "./Value";
 
-export type WebSocketMessage = "register_user_client" | { "register_compute_node": ComputeNodeCapabilities } | { "update_parameters": Parameters } | { "compute_nodes": Array<ComputeNode> } | { "with_procedure_params": { procedure_name: string, source_uuid: string | null, destination_uuid: string, params: { [key in string]?: Value }, } } | { "procedure_description": { procedure_name: string, source_uuid: string | null, destination_uuid: string, procedure: ProcedureUiDescription, } } | { "start_procedure": { compute_node_uuid: string, procedure_name: string, params: { [key in string]?: Value }, } } | { "logs": Array<LogEntry> };
+export type WebSocketMessage = "register_user_client" | { "register_compute_node": ComputeNodeCapabilities } | { "update_parameters": Parameters } | { "compute_nodes": Array<ComputeNode> } | { "with_task_params": { task_name: string, source_uuid: string | null, destination_uuid: string, params: { [key in string]?: Value }, } } | { "task_description": { task_name: string, source_uuid: string | null, destination_uuid: string, ui_description: TaskUiDescription, } } | { "start_task": { compute_node_uuid: string, task_name: string, params: { [key in string]?: Value }, } } | { "logs": Array<LogEntry> };

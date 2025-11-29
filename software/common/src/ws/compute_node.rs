@@ -50,7 +50,7 @@ pub enum Widget {
 #[cfg_attr(feature = "ts", derive(TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcedureUiDescription {
+pub struct TaskUiDescription {
     pub name: String,
     pub display_name: String,
     pub description: String,
@@ -64,7 +64,7 @@ pub struct ProcedureUiDescription {
 #[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputeNodeCapabilities {
-    pub procedures: HashMap<String, ProcedureUiDescription>,
+    pub tasks: HashMap<String, TaskUiDescription>,
 }
 
 #[cfg_attr(feature = "ts", derive(TS))]

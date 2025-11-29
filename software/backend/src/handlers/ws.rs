@@ -28,7 +28,7 @@ impl PeerRole {
             PeerRole::UserClient(id) => Ok(id.clone()),
             PeerRole::ComputeNode(id) => Ok(id.clone()),
             PeerRole::Unregistered => Err(anyhow!(
-                "Unregistered client attempted to send procedure description"
+                "Unregistered client attempted to send task description"
             )),
         }
     }
@@ -111,51 +111,51 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
             let mut p = conn.app.parameters_controller.write().await;
             p.patch(&new_params);
         }
-        WebSocketMessage::WithProcedureParams {
-            procedure_name,
+        WebSocketMessage::WithTaskParams {
+            task_name,
             destination_uuid,
             params,
             ..
         } => {
             conn.channels
                 .inter_client_relay
-                .send(WebSocketMessage::WithProcedureParams {
+                .send(WebSocketMessage::WithTaskParams {
                     source_uuid: Some(conn.role.get_id()?),
-                    procedure_name,
+                    task_name,
                     destination_uuid,
                     params,
                 })?;
         }
-        WebSocketMessage::ProcedureDescription {
-            procedure_name,
+        WebSocketMessage::TaskDescription {
+            task_name,
             destination_uuid,
-            procedure,
+            ui_description,
             ..
         } => {
             conn.channels
                 .inter_client_relay
-                .send(WebSocketMessage::ProcedureDescription {
-                    procedure_name,
+                .send(WebSocketMessage::TaskDescription {
+                    task_name,
                     destination_uuid,
-                    procedure,
+                    ui_description,
                     source_uuid: Some(conn.role.get_id()?),
                 })?;
         }
-        WebSocketMessage::StartProcedure {
+        WebSocketMessage::StartTask {
             compute_node_uuid,
-            procedure_name,
+            task_name,
             params,
         } => {
             if !matches!(conn.role, PeerRole::UserClient(_)) {
-                error!("Only UserClient can start procedures");
+                error!("Only user clients can start tasks.");
                 return Ok(());
             }
 
             conn.channels
                 .inter_client_relay
-                .send(WebSocketMessage::StartProcedure {
+                .send(WebSocketMessage::StartTask {
                     compute_node_uuid,
-                    procedure_name,
+                    task_name,
                     params,
                 })?;
         }
@@ -236,13 +236,13 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                 };
 
                 match &msg {
-                    WebSocketMessage::ProcedureDescription { destination_uuid, .. } |
-                    WebSocketMessage::WithProcedureParams { destination_uuid, .. } => {
+                    WebSocketMessage::TaskDescription { destination_uuid, .. } |
+                    WebSocketMessage::WithTaskParams { destination_uuid, .. } => {
                         if self_id != *destination_uuid {
                             continue; // Not intended for this client
                         }
                     }
-                    WebSocketMessage::StartProcedure { compute_node_uuid, .. } => {
+                    WebSocketMessage::StartTask { compute_node_uuid, .. } => {
                         if self_id != *compute_node_uuid {
                             continue; // Not intended for this client
                         }

@@ -1,58 +1,58 @@
 <script lang="ts">
 	import type { ComputeNode } from '$lib/bindings/ComputeNode';
-	import type { ProcedureUi } from '$lib/bindings/ProcedureUi';
+	import type { TaskUiDescription } from '$lib/bindings/TaskUiDescription';
 	import type { State } from '$lib/state';
-	import Procedure from './Procedure.svelte';
+	import Task from './Task.svelte';
 
 	let { appState = $bindable<State>() } = $props();
 
 	let compute_nodes: ComputeNode[] = $state([]);
-	let procedure_components: Record<string, Procedure> = $state({});
+	let task_components: Record<string, Task> = $state({});
 
 	export const initAllComputeNodes = (new_compute_nodes: ComputeNode[]) => {
 		compute_nodes = new_compute_nodes;
 	};
 
-	export const updateComputeNode = (node_id: string, procedure_ui: ProcedureUi) => {
-		const id = getProcedureId(node_id, procedure_ui.name);
-		procedure_components[id]?.updateUiFromBackend(procedure_ui);
+	export const updateComputeNode = (node_id: string, task_ui: TaskUiDescription) => {
+		const id = getTaskId(node_id, task_ui.name);
+		task_components[id]?.updateUiFromBackend(task_ui);
 	};
 
-	const getProcedureId = (compute_node_uuid: string, procedure_name: string) => {
-		return `${compute_node_uuid}-${procedure_name}`;
+	const getTaskId = (compute_node_uuid: string, task_name: string) => {
+		return `${compute_node_uuid}-${task_name}`;
 	};
 
-	const listProcedures = () => {
-		let procedure_list: {
+	const listTasks = () => {
+		let task_list: {
 			compute_node_uuid: string;
-			procedure_id: string;
-			procedure: ProcedureUi;
+			task_id: string;
+			task: TaskUiDescription;
 		}[] = [];
 
 		for (const node of compute_nodes) {
-			for (const [procedure_id, procedure] of Object.entries(node.capabilities.procedures)) {
-				if (procedure !== undefined) {
-					procedure_list.push({
-						procedure,
+			for (const [task_id, task] of Object.entries(node.capabilities.tasks)) {
+				if (task !== undefined) {
+					task_list.push({
+						task: task,
 						compute_node_uuid: node.node_id,
-						procedure_id: procedure_id
+						task_id: task_id
 					});
 				}
 			}
 		}
 
-		return procedure_list;
+		return task_list;
 	};
 </script>
 
 <div class="flex flex-col gap-2">
-	{#each listProcedures() as entry}
-		{@const id = getProcedureId(entry.compute_node_uuid, entry.procedure.name)}
-		<Procedure
+	{#each listTasks() as entry}
+		{@const id = getTaskId(entry.compute_node_uuid, entry.task.name)}
+		<Task
 			compute_node_id={entry.compute_node_uuid}
-			procedure={entry.procedure}
+			task={entry.task}
 			{appState}
-			bind:this={procedure_components[id]}
+			bind:this={task_components[id]}
 		/>
 	{/each}
 </div>

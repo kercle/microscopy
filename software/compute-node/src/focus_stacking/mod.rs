@@ -5,10 +5,10 @@ use common::ws::value::Value;
 use reqwest;
 
 use common::rest::z_scan::ZScanMetadata;
-use common::ws::compute_node::{ProcedureUiDescription, Widget, WidgetPosition};
+use common::ws::compute_node::{TaskUiDescription, Widget, WidgetPosition};
 use tokio::sync::watch;
 
-use crate::procedure::Procedure;
+use crate::task::Task;
 
 const THUMBNAIL_SIZE: u32 = 400;
 
@@ -93,8 +93,8 @@ impl FocusStacking {
 }
 
 #[async_trait::async_trait]
-impl Procedure for FocusStacking {
-    async fn describe(&self, params: HashMap<String, Value>) -> ProcedureUiDescription {
+impl Task for FocusStacking {
+    async fn describe(&self, params: HashMap<String, Value>) -> TaskUiDescription {
         let host_name = &self.host_name;
 
         let image_stacks = Self::list_image_stacks(host_name).await;
@@ -106,7 +106,7 @@ impl Procedure for FocusStacking {
             format!("")
         };
 
-        ProcedureUiDescription {
+        TaskUiDescription {
             name: "focus_stacking".to_string(),
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),

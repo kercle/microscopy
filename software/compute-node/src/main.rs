@@ -1,5 +1,5 @@
 mod focus_stacking;
-mod procedure;
+mod task;
 
 use std::{collections::HashMap, env};
 
@@ -9,12 +9,12 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 
-use crate::procedure::Procedure;
+use crate::task::Task;
 
 #[derive(Clone)]
 struct AppState {
     cancel_token: CancellationToken,
-    exec_queue_tx: mpsc::Sender<(Box<dyn procedure::Procedure + Send>, HashMap<String, Value>)>,
+    exec_queue_tx: mpsc::Sender<(Box<dyn task::Task + Send>, HashMap<String, Value>)>,
     focus_stacking: focus_stacking::FocusStacking,
 }
 
@@ -26,11 +26,11 @@ async fn react_to_focus_stacking_request(
 ) {
     let desc = app_state.focus_stacking.describe(params).await;
 
-    let payload = serde_json::to_string(&WebSocketMessage::ProcedureDescription {
-        procedure_name: "focus_stacking".to_string(),
+    let payload = serde_json::to_string(&WebSocketMessage::TaskDescription {
+        task_name: "focus_stacking".to_string(),
         source_uuid: None,
         destination_uuid: source_uuid,
-        procedure: desc,
+        ui_description: desc,
     });
 
     if let Ok(payload) = payload {
@@ -44,8 +44,8 @@ async fn process_websocket_message(
     sender_tx: &mpsc::UnboundedSender<Message>,
 ) {
     match msg {
-        WebSocketMessage::WithProcedureParams {
-            procedure_name,
+        WebSocketMessage::WithTaskParams {
+            task_name,
             source_uuid,
             destination_uuid: _,
             params,
@@ -55,31 +55,31 @@ async fn process_websocket_message(
                 return;
             }
 
-            if procedure_name == "focus_stacking" && source_uuid.is_some() {
+            if task_name == "focus_stacking" && source_uuid.is_some() {
                 react_to_focus_stacking_request(sender_tx, app_state, source_uuid.unwrap(), params)
                     .await;
             }
         }
-        WebSocketMessage::StartProcedure {
+        WebSocketMessage::StartTask {
             compute_node_uuid,
-            procedure_name,
+            task_name,
             params,
         } => {
-            if procedure_name == "focus_stacking" {
-                let procedure: Box<dyn procedure::Procedure + Send> =
+            if task_name == "focus_stacking" {
+                let task: Box<dyn task::Task + Send> =
                     Box::new(app_state.focus_stacking.clone());
 
-                if let Err(e) = app_state.exec_queue_tx.try_send((procedure, params)) {
+                if let Err(e) = app_state.exec_queue_tx.try_send((task, params)) {
                     println!(
-                        "Failed to enqueue FocusStacking procedure for compute node: {compute_node_uuid}, error: {e}"
+                        "Failed to enqueue FocusStacking task for compute node: {compute_node_uuid}, error: {e}"
                     );
                 } else {
                     println!(
-                        "Enqueued FocusStacking procedure for compute node: {compute_node_uuid}"
+                        "Enqueued FocusStacking task for compute node: {compute_node_uuid}"
                     );
                 }
             } else {
-                println!("Received StartProcedure for unknown procedure: {procedure_name}");
+                println!("Received StartTask for unknown task: {task_name}");
             }
         }
         _ => {
@@ -118,7 +118,7 @@ async fn process_message(
 async fn processing_thread(
     app_state: AppState,
     mut exec_queue_rx: mpsc::Receiver<(
-        Box<dyn procedure::Procedure + Send>,
+        Box<dyn task::Task + Send>,
         HashMap<String, Value>,
     )>,
 ) {
@@ -127,8 +127,8 @@ async fn processing_thread(
             _ = app_state.cancel_token.cancelled() => {
                 break;
             }
-            Some((procedure, params)) = exec_queue_rx.recv() => {
-                procedure.execute(params).await;
+            Some((task, params)) = exec_queue_rx.recv() => {
+                task.execute(params).await;
             }
         }
     }
@@ -165,7 +165,7 @@ async fn sender_thread(
     mut write: impl SinkExt<Message> + Unpin,
 ) {
     let capabilities = ComputeNodeCapabilities {
-        procedures: HashMap::from([(
+        tasks: HashMap::from([(
             "focus_stacking".to_string(),
             app_state.focus_stacking.describe(HashMap::new()).await,
         )]),
@@ -214,7 +214,7 @@ async fn main() {
     println!("WebSocket handshake has been successfully completed");
 
     let (exec_queue_tx, exec_queue_rx) =
-        mpsc::channel::<(Box<dyn procedure::Procedure + Send>, HashMap<String, Value>)>(100);
+        mpsc::channel::<(Box<dyn task::Task + Send>, HashMap<String, Value>)>(100);
     let app_state = AppState {
         cancel_token: CancellationToken::new(),
         exec_queue_tx,

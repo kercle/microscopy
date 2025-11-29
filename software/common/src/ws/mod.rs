@@ -4,7 +4,7 @@ use std::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ws::{compute_node::ProcedureUiDescription, value::Value};
+use crate::ws::{compute_node::TaskUiDescription, value::Value};
 
 #[cfg(feature = "ts")]
 use {std::format, std::string::ToString, ts_rs::TS};
@@ -29,21 +29,21 @@ pub enum WebSocketMessage {
 
     UpdateParameters(Parameters),
     ComputeNodes(Vec<ComputeNode>),
-    WithProcedureParams {
-        procedure_name: String,
+    WithTaskParams {
+        task_name: String,
         source_uuid: Option<String>,
         destination_uuid: String,
         params: HashMap<String, Value>,
     },
-    ProcedureDescription {
-        procedure_name: String,
+    TaskDescription {
+        task_name: String,
         source_uuid: Option<String>,
         destination_uuid: String,
-        procedure: ProcedureUiDescription,
+        ui_description: TaskUiDescription,
     },
-    StartProcedure {
+    StartTask {
         compute_node_uuid: String,
-        procedure_name: String,
+        task_name: String,
         params: HashMap<String, Value>,
     },
 
