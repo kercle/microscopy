@@ -1,7 +1,7 @@
 mod focus_stacking;
 mod task;
 
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, sync::Arc};
 
 use common::ws::{WebSocketMessage, compute_node::ComputeNodeCapabilities, value::Value};
 use futures_util::{SinkExt, StreamExt};
@@ -11,11 +11,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::task::Task;
 
+type TaskPtr = Arc<dyn Task + Send + Sync>;
+
 #[derive(Clone)]
 struct AppState {
     cancel_token: CancellationToken,
-    exec_queue_tx: mpsc::Sender<(Box<dyn task::Task + Send>, HashMap<String, Value>)>,
-    focus_stacking: focus_stacking::FocusStacking,
+    exec_queue_tx: mpsc::Sender<(TaskPtr, HashMap<String, Value>)>,
+    tasks: HashMap<&'static str, TaskPtr>,
 }
 
 async fn react_to_focus_stacking_request(
@@ -24,7 +26,7 @@ async fn react_to_focus_stacking_request(
     source_uuid: String,
     params: HashMap<String, common::ws::value::Value>,
 ) {
-    let desc = app_state.focus_stacking.describe(params).await;
+    let desc = app_state.tasks["focus_stacking"].describe(params).await;
 
     let payload = serde_json::to_string(&WebSocketMessage::TaskDescription {
         task_name: "focus_stacking".to_string(),
@@ -65,18 +67,13 @@ async fn process_websocket_message(
             task_name,
             params,
         } => {
-            if task_name == "focus_stacking" {
-                let task: Box<dyn task::Task + Send> =
-                    Box::new(app_state.focus_stacking.clone());
-
-                if let Err(e) = app_state.exec_queue_tx.try_send((task, params)) {
+            if let Some(task) = app_state.tasks.get(task_name.as_str()) {
+                if let Err(e) = app_state.exec_queue_tx.try_send((task.clone(), params)) {
                     println!(
                         "Failed to enqueue FocusStacking task for compute node: {compute_node_uuid}, error: {e}"
                     );
                 } else {
-                    println!(
-                        "Enqueued FocusStacking task for compute node: {compute_node_uuid}"
-                    );
+                    println!("Enqueued FocusStacking task for compute node: {compute_node_uuid}");
                 }
             } else {
                 println!("Received StartTask for unknown task: {task_name}");
@@ -117,10 +114,7 @@ async fn process_message(
 
 async fn processing_thread(
     app_state: AppState,
-    mut exec_queue_rx: mpsc::Receiver<(
-        Box<dyn task::Task + Send>,
-        HashMap<String, Value>,
-    )>,
+    mut exec_queue_rx: mpsc::Receiver<(TaskPtr, HashMap<String, Value>)>,
 ) {
     loop {
         tokio::select! {
@@ -167,7 +161,9 @@ async fn sender_thread(
     let capabilities = ComputeNodeCapabilities {
         tasks: HashMap::from([(
             "focus_stacking".to_string(),
-            app_state.focus_stacking.describe(HashMap::new()).await,
+            app_state.tasks["focus_stacking"]
+                .describe(HashMap::new())
+                .await,
         )]),
     };
 
@@ -213,12 +209,14 @@ async fn main() {
         .expect("Failed to connect");
     println!("WebSocket handshake has been successfully completed");
 
-    let (exec_queue_tx, exec_queue_rx) =
-        mpsc::channel::<(Box<dyn task::Task + Send>, HashMap<String, Value>)>(100);
+    let task_focus_stacking: TaskPtr =
+        Arc::new(focus_stacking::FocusStacking::new(host_name.clone()));
+
+    let (exec_queue_tx, exec_queue_rx) = mpsc::channel::<(TaskPtr, HashMap<String, Value>)>(100);
     let app_state = AppState {
         cancel_token: CancellationToken::new(),
         exec_queue_tx,
-        focus_stacking: focus_stacking::FocusStacking::new(host_name.clone()),
+        tasks: HashMap::from([("focus_stacking", task_focus_stacking)]),
     };
 
     let (sender_tx, sender_rx) = mpsc::unbounded_channel();
