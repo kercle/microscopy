@@ -50,7 +50,7 @@
 	};
 </script>
 
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-4">
 	{#each listTasks() as entry}
 		{@const id = getTaskId(entry.compute_node_uuid, entry.task.name)}
 		<Task
