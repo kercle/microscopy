@@ -55,6 +55,8 @@ pub struct ProcedureUiDescription {
     pub display_name: String,
     pub description: String,
     pub columns: u32,
+    pub progress: Option<f32>,
+    pub locked: bool,
     pub elements: HashMap<String, Widget>,
 }
 

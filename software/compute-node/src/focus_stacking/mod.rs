@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use common::ws::value::Value;
@@ -6,14 +7,21 @@ use reqwest;
 
 use common::rest::z_scan::ZScanMetadata;
 use common::ws::compute_node::{Widget, WidgetPosition, ProcedureUiDescription};
+use tokio::sync::Mutex;
 
 const THUMBNAIL_SIZE: u32 = 400;
 
-pub struct FocusStacking {}
+pub type MutexedFocusStacking = Arc<Mutex<FocusStacking>>;
+
+pub struct FocusStacking {
+    progress: Option<f32>,
+}
 
 impl FocusStacking {
-    pub fn _new() -> Self {
-        FocusStacking {}
+    pub fn new() -> Self {
+        FocusStacking {
+            progress: None,
+        }
     }
 
     async fn fetch_image_stacks(host_name: &str) -> Result<Vec<String>> {
@@ -66,7 +74,7 @@ impl FocusStacking {
         }
     }
 
-    pub async fn describe(host_name: &str, params: HashMap<String, Value>) -> ProcedureUiDescription {
+    pub async fn describe(&self, host_name: &str, params: HashMap<String, Value>) -> ProcedureUiDescription {
         let image_stacks = Self::list_image_stacks(host_name).await;
         let selected_stack = Self::get_selected_image_stack(&params, &image_stacks).await;
 
@@ -81,6 +89,8 @@ impl FocusStacking {
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
             columns: 4,
+            progress: self.progress,
+            locked: false,
             elements: HashMap::from([
                 ("stack_preview".to_string(), Widget::Image {
                     display_name: "Stack Preview".to_string(),
