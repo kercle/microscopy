@@ -85,6 +85,7 @@ async fn process_websocket_message(
                 return;
             }
 
+            // TODO: Make this more generic for other tasks
             if task_name == "focus_stacking" && source_uuid.is_some() {
                 react_to_focus_stacking_request(sender_tx, app_state, source_uuid.unwrap(), params)
                     .await;
