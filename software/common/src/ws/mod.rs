@@ -41,6 +41,11 @@ pub enum WebSocketMessage {
         destination_uuid: String,
         procedure: ProcedureUiDescription,
     },
+    StartProcedure {
+        compute_node_uuid: String,
+        procedure_name: String,
+        params: HashMap<String, Value>,
+    },
 
     Logs(Vec<LogEntry>),
 }

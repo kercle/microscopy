@@ -12,3 +12,4 @@ common = { path = "../common" }
 serde_json = "1.0.145"
 reqwest = "0.12.24"
 anyhow = "1.0.100"
+async-trait = "0.1.89"

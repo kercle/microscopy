@@ -1,27 +1,41 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use common::ws::value::Value;
 use reqwest;
 
 use common::rest::z_scan::ZScanMetadata;
-use common::ws::compute_node::{Widget, WidgetPosition, ProcedureUiDescription};
-use tokio::sync::Mutex;
+use common::ws::compute_node::{ProcedureUiDescription, Widget, WidgetPosition};
+use tokio::sync::watch;
+
+use crate::procedure::Procedure;
 
 const THUMBNAIL_SIZE: u32 = 400;
 
-pub type MutexedFocusStacking = Arc<Mutex<FocusStacking>>;
-
+#[derive(Clone)]
 pub struct FocusStacking {
-    progress: Option<f32>,
+    host_name: String,
+
+    progress_rx: watch::Receiver<Option<f32>>,
+    progress_tx: watch::Sender<Option<f32>>,
 }
 
 impl FocusStacking {
-    pub fn new() -> Self {
+    pub fn new(host_name: String) -> Self {
+        let (progress_tx, progress_rx) = watch::channel(None);
         FocusStacking {
-            progress: None,
+            host_name,
+            progress_rx,
+            progress_tx,
         }
+    }
+
+    pub async fn progress(&self) -> Option<f32> {
+        *self.progress_rx.borrow()
+    }
+
+    pub async fn set_progress(&self, progress: Option<f32>) {
+        let _ = self.progress_tx.send(progress);
     }
 
     async fn fetch_image_stacks(host_name: &str) -> Result<Vec<String>> {
@@ -52,7 +66,10 @@ impl FocusStacking {
         }
     }
 
-    async fn get_selected_image_stack(params: &HashMap<String, Value>, image_stacks: &Vec<String>) -> Option<String> {
+    async fn get_selected_image_stack(
+        params: &HashMap<String, Value>,
+        image_stacks: &Vec<String>,
+    ) -> Option<String> {
         if let Some(Value::String(selected_stack)) = params.get("image_stack") {
             if !image_stacks.contains(&selected_stack) {
                 println!(
@@ -73,8 +90,13 @@ impl FocusStacking {
             None
         }
     }
+}
 
-    pub async fn describe(&self, host_name: &str, params: HashMap<String, Value>) -> ProcedureUiDescription {
+#[async_trait::async_trait]
+impl Procedure for FocusStacking {
+    async fn describe(&self, params: HashMap<String, Value>) -> ProcedureUiDescription {
+        let host_name = &self.host_name;
+
         let image_stacks = Self::list_image_stacks(host_name).await;
         let selected_stack = Self::get_selected_image_stack(&params, &image_stacks).await;
 
@@ -89,7 +111,7 @@ impl FocusStacking {
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
             columns: 4,
-            progress: self.progress,
+            progress: self.progress().await,
             locked: false,
             elements: HashMap::from([
                 ("stack_preview".to_string(), Widget::Image {
@@ -125,5 +147,11 @@ impl FocusStacking {
                 }),
             ]),
         }
+    }
+
+    async fn execute(&self, params: HashMap<String, Value>) {
+        self.set_progress(Some(0.0)).await;
+        println!("Executing focus stacking with params: {:?}", params);
+        self.set_progress(Some(1.0)).await;
     }
 }

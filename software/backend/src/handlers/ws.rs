@@ -141,6 +141,24 @@ async fn process_parsed_message(msg: WebSocketMessage, conn: &mut WsConnection) 
                     source_uuid: Some(conn.role.get_id()?),
                 })?;
         }
+        WebSocketMessage::StartProcedure {
+            compute_node_uuid,
+            procedure_name,
+            params,
+        } => {
+            if !matches!(conn.role, PeerRole::UserClient(_)) {
+                error!("Only UserClient can start procedures");
+                return Ok(());
+            }
+
+            conn.channels
+                .inter_client_relay
+                .send(WebSocketMessage::StartProcedure {
+                    compute_node_uuid,
+                    procedure_name,
+                    params,
+                })?;
+        }
         WebSocketMessage::Logs(_) | WebSocketMessage::ComputeNodes(_) => {
             // message to client only; ignore
         }
@@ -221,6 +239,11 @@ async fn handle_socket(socket: WebSocket, app: AppState) -> Result<()> {
                     WebSocketMessage::ProcedureDescription { destination_uuid, .. } |
                     WebSocketMessage::WithProcedureParams { destination_uuid, .. } => {
                         if self_id != *destination_uuid {
+                            continue; // Not intended for this client
+                        }
+                    }
+                    WebSocketMessage::StartProcedure { compute_node_uuid, .. } => {
+                        if self_id != *compute_node_uuid {
                             continue; // Not intended for this client
                         }
                     }
