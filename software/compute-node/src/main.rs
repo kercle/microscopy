@@ -4,8 +4,10 @@ mod task;
 use std::{collections::HashMap, env, sync::Arc};
 
 use common::ws::{WebSocketMessage, compute_node::ComputeNodeCapabilities, value::Value};
+use futures::stream::{Map, SelectAll, select_all};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::WatchStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 
@@ -18,6 +20,32 @@ struct AppState {
     cancel_token: CancellationToken,
     exec_queue_tx: mpsc::Sender<(TaskPtr, HashMap<String, Value>)>,
     tasks: HashMap<&'static str, TaskPtr>,
+}
+
+impl AppState {
+    fn process_dynamic_progress(
+        &self,
+    ) -> SelectAll<Map<WatchStream<Option<f32>>, impl FnMut(Option<f32>) -> Option<(String, f32)>>>
+    {
+        let mut streams = Vec::new();
+
+        for (task_id, task_ptr) in self.tasks.iter() {
+            let receiver = task_ptr.get_progress_receiver();
+            let watch_stream = WatchStream::new(receiver);
+            let owned_task_id = task_id.to_string();
+
+            let mapped_stream = watch_stream.map(move |item| {
+                if let Some(progress) = item {
+                    return Some((owned_task_id.clone(), progress));
+                }
+                None
+            });
+
+            streams.push(mapped_stream);
+        }
+
+        select_all(streams)
+    }
 }
 
 async fn react_to_focus_stacking_request(
@@ -158,6 +186,8 @@ async fn sender_thread(
     mut sender_rx: mpsc::UnboundedReceiver<Message>,
     mut write: impl SinkExt<Message> + Unpin,
 ) {
+    let mut progress_stream = app_state.process_dynamic_progress();
+
     let capabilities = ComputeNodeCapabilities {
         tasks: HashMap::from([(
             "focus_stacking".to_string(),
@@ -180,6 +210,15 @@ async fn sender_thread(
             }
             Some(msg) = sender_rx.recv() => {
                 let _ = write.send(msg).await;
+            }
+            Some(msg) = progress_stream.next() => {
+                if msg.is_none() {
+                    continue;
+                }
+
+                let (task_name, progress) = msg.unwrap();
+                println!("Progress update: {task_name} - {progress}" );
+                // println!("Sending progress update for task: {}, progress: {}", task_name, progress);
             }
         }
     }

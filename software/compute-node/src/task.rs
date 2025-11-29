@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 
 use common::ws::{compute_node::TaskUiDescription, value::Value};
+use tokio::sync::watch;
 
 #[async_trait]
 pub trait Task {
     async fn describe(&self, params: HashMap<String, Value>) -> TaskUiDescription;
     async fn execute(&self, params: HashMap<String, Value>);
+
+    fn get_progress_receiver(&self) -> watch::Receiver<Option<f32>>;
 }

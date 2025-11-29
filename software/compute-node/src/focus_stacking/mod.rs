@@ -30,7 +30,7 @@ impl FocusStacking {
         }
     }
 
-    pub async fn progress(&self) -> Option<f32> {
+    pub async fn get_progress(&self) -> Option<f32> {
         *self.progress_rx.borrow()
     }
 
@@ -111,7 +111,7 @@ impl Task for FocusStacking {
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
             columns: 4,
-            progress: self.progress().await,
+            progress: self.get_progress().await,
             locked: false,
             elements: HashMap::from([
                 ("stack_preview".to_string(), Widget::Image {
@@ -161,5 +161,9 @@ impl Task for FocusStacking {
             println!("Focus stacking progress: {:.0}%", progress * 100.0);
         }
         self.set_progress(Some(1.0)).await;
+    }
+
+    fn get_progress_receiver(&self) -> watch::Receiver<Option<f32>> {
+        self.progress_rx.clone()
     }
 }
