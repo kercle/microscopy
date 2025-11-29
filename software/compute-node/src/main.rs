@@ -248,16 +248,10 @@ async fn main() {
     let app_state = AppState {
         cancel_token: CancellationToken::new(),
         exec_queue_tx,
-        tasks: HashMap::from([
-            (
-                "focus_stacking",
-                Arc::new(focus_stacking::FocusStacking::new(host_name.clone())) as TaskPtr,
-            ),
-            (
-                "focus_stacking_alt",
-                Arc::new(focus_stacking::FocusStacking::new(host_name.clone())) as TaskPtr,
-            ),
-        ]),
+        tasks: HashMap::from([(
+            "focus_stacking",
+            Arc::new(focus_stacking::FocusStacking::new(host_name.clone())) as TaskPtr,
+        )]),
     };
 
     let (sender_tx, sender_rx) = mpsc::unbounded_channel();
