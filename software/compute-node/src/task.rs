@@ -7,7 +7,7 @@ use tokio::sync::watch;
 
 #[async_trait]
 pub trait Task {
-    async fn describe(&self, params: HashMap<String, Value>) -> TaskUiDescription;
+    async fn describe(&self, task_name: String, params: HashMap<String, Value>) -> TaskUiDescription;
     async fn execute(&self, params: HashMap<String, Value>);
 
     fn get_progress_receiver(&self) -> watch::Receiver<Option<f32>>;

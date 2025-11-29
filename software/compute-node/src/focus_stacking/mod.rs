@@ -94,7 +94,11 @@ impl FocusStacking {
 
 #[async_trait::async_trait]
 impl Task for FocusStacking {
-    async fn describe(&self, params: HashMap<String, Value>) -> TaskUiDescription {
+    async fn describe(
+        &self,
+        task_name: String,
+        params: HashMap<String, Value>,
+    ) -> TaskUiDescription {
         let host_name = &self.host_name;
 
         let image_stacks = Self::list_image_stacks(host_name).await;
@@ -107,7 +111,7 @@ impl Task for FocusStacking {
         };
 
         TaskUiDescription {
-            name: "focus_stacking".to_string(),
+            name: task_name,
             display_name: "Focus Stacking".to_string(),
             description: "Generates an image with extended depth of field by combining multiple images taken at different focus distances.".to_string(),
             columns: 4,

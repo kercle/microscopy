@@ -48,26 +48,6 @@ impl AppState {
     }
 }
 
-async fn react_to_focus_stacking_request(
-    sender_tx: &mpsc::UnboundedSender<Message>,
-    app_state: &AppState,
-    source_uuid: String,
-    params: HashMap<String, common::ws::value::Value>,
-) {
-    let desc = app_state.tasks["focus_stacking"].describe(params).await;
-
-    let payload = serde_json::to_string(&WebSocketMessage::TaskDescription {
-        task_name: "focus_stacking".to_string(),
-        source_uuid: None,
-        destination_uuid: source_uuid,
-        ui_description: desc,
-    });
-
-    if let Ok(payload) = payload {
-        let _ = sender_tx.send(Message::Text(payload.into()));
-    }
-}
-
 async fn process_websocket_message(
     msg: WebSocketMessage,
     app_state: &AppState,
@@ -81,14 +61,21 @@ async fn process_websocket_message(
             params,
             ..
         } => {
-            if source_uuid.is_none() {
+            if source_uuid.is_none() || source_uuid.is_none() {
                 return;
             }
 
-            // TODO: Make this more generic for other tasks
-            if task_name == "focus_stacking" && source_uuid.is_some() {
-                react_to_focus_stacking_request(sender_tx, app_state, source_uuid.unwrap(), params)
-                    .await;
+            if let Some(task) = app_state.tasks.get(task_name.as_str()) {
+                let payload = serde_json::to_string(&WebSocketMessage::TaskDescription {
+                    task_name: task_name.clone(),
+                    source_uuid: None,
+                    destination_uuid: source_uuid.unwrap(),
+                    ui_description: task.describe(task_name.clone(), params).await,
+                });
+
+                if let Ok(payload) = payload {
+                    let _ = sender_tx.send(Message::Text(payload.into()));
+                }
             }
         }
         WebSocketMessage::StartTask {
@@ -189,14 +176,15 @@ async fn sender_thread(
 ) {
     let mut progress_stream = app_state.process_dynamic_progress();
 
-    let capabilities = ComputeNodeCapabilities {
-        tasks: HashMap::from([(
-            "focus_stacking".to_string(),
-            app_state.tasks["focus_stacking"]
-                .describe(HashMap::new())
-                .await,
-        )]),
-    };
+    let mut tasks = HashMap::new();
+    for (task_name, task_ptr) in app_state.tasks.iter() {
+        let ui_description = task_ptr
+            .describe(task_name.to_string(), HashMap::new())
+            .await;
+        tasks.insert(task_name.to_string(), ui_description);
+    }
+
+    let capabilities = ComputeNodeCapabilities { tasks };
 
     let payload = serde_json::to_string(&common::ws::WebSocketMessage::RegisterComputeNode(
         capabilities,
@@ -253,14 +241,23 @@ async fn main() {
         .expect("Failed to connect");
     println!("WebSocket handshake has been successfully completed");
 
-    let task_focus_stacking: TaskPtr =
-        Arc::new(focus_stacking::FocusStacking::new(host_name.clone()));
+    // let task_focus_stacking: TaskPtr =
+    //     ;
 
     let (exec_queue_tx, exec_queue_rx) = mpsc::channel::<(TaskPtr, HashMap<String, Value>)>(100);
     let app_state = AppState {
         cancel_token: CancellationToken::new(),
         exec_queue_tx,
-        tasks: HashMap::from([("focus_stacking", task_focus_stacking)]),
+        tasks: HashMap::from([
+            (
+                "focus_stacking",
+                Arc::new(focus_stacking::FocusStacking::new(host_name.clone())) as TaskPtr,
+            ),
+            (
+                "focus_stacking_alt",
+                Arc::new(focus_stacking::FocusStacking::new(host_name.clone())) as TaskPtr,
+            ),
+        ]),
     };
 
     let (sender_tx, sender_rx) = mpsc::unbounded_channel();

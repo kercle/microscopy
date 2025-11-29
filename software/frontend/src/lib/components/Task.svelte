@@ -84,7 +84,7 @@
 				<h2 class="card-title whitespace-nowrap text-lg font-bold" bind:this={task_title}>
 					{task.display_name}
 				</h2>
-				<progress class="progress mx-5" value="0.2" max="1" bind:this={task_progress}></progress>
+				<progress class="progress mx-5" value="0" max="1" bind:this={task_progress}></progress>
 				<button class="btn btn-ghost text-primary" onclick={startTask}><Live /></button>
 			</div>
 		</div>
