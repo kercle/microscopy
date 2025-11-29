@@ -15,7 +15,12 @@
 
 	export const updateComputeNode = (node_id: string, task_ui: TaskUiDescription) => {
 		const id = getTaskId(node_id, task_ui.name);
-		task_components[id]?.updateUiFromBackend(task_ui);
+		task_components[id]?.updateUi(task_ui);
+	};
+
+	export const updateTaskProgress = (node_id: string, task_name: string, progress: number) => {
+		const id = getTaskId(node_id, task_name);
+		task_components[id]?.updateProgress(progress);
 	};
 
 	const getTaskId = (compute_node_uuid: string, task_name: string) => {

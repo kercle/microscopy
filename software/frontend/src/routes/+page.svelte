@@ -46,6 +46,12 @@
 				if (node_id) {
 					processing_tab_ref.updateComputeNode(node_id, msg.task_description.ui_description);
 				}
+			} else if ('task_progress_update' in msg) {
+				const node_id = msg.task_progress_update.compute_node_uuid!;
+				const task_name = msg.task_progress_update.task_name;
+				const progress = msg.task_progress_update.progress;
+
+				processing_tab_ref.updateTaskProgress(node_id, task_name, progress);
 			} else {
 				console.warn('Unhandled WebSocket message:', msg);
 			}

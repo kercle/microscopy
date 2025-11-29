@@ -19,7 +19,7 @@
 
 	let ui_values: Record<string, Value> = {};
 
-	export const updateUiFromBackend = (task_ui: TaskUiDescription) => {
+	export const updateUi = (task_ui: TaskUiDescription) => {
 		task_title!.textContent = task_ui.display_name;
 
 		for (const [element_id, element_entry] of Object.entries(task_ui.elements)) {
@@ -31,6 +31,10 @@
 
 			task_elements[element_id].update(element_entry);
 		}
+	};
+
+	export const updateProgress = (progress: number) => {
+		task_progress!.value = progress;
 	};
 
 	const listWidgetsForTask = () => {
@@ -80,7 +84,7 @@
 				<h2 class="card-title whitespace-nowrap text-lg font-bold" bind:this={task_title}>
 					{task.display_name}
 				</h2>
-				<progress class="progress mx-5" value="40" max="100" bind:this={task_progress}></progress>
+				<progress class="progress mx-5" value="0.2" max="1" bind:this={task_progress}></progress>
 				<button class="btn btn-ghost text-primary" onclick={startTask}><Live /></button>
 			</div>
 		</div>
