@@ -10,7 +10,7 @@ use common::rest::z_scan::ZScanMetadata;
 use common::ws::compute_node::{TaskUiDescription, Widget, WidgetPosition};
 use tokio::sync::watch;
 
-use crate::task::Task;
+use crate::tasks::Task;
 
 const THUMBNAIL_SIZE: u32 = 250;
 

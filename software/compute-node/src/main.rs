@@ -1,6 +1,5 @@
-mod focus_stacking;
-mod task;
 mod helpers;
+mod tasks;
 
 use std::{collections::HashMap, env, sync::Arc};
 
@@ -12,7 +11,8 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 
-use crate::task::Task;
+use crate::tasks::Task;
+use crate::tasks::focus_stacking::FocusStacking;
 
 type TaskPtr = Arc<dyn Task + Send + Sync>;
 
@@ -251,7 +251,7 @@ async fn main() {
         exec_queue_tx,
         tasks: HashMap::from([(
             "focus_stacking",
-            Arc::new(focus_stacking::FocusStacking::new(host_name.clone())) as TaskPtr,
+            Arc::new(FocusStacking::new(host_name.clone())) as TaskPtr,
         )]),
     };
 

@@ -6,7 +6,7 @@ use common::rest::z_scan::ZScanMetadata;
 use reqwest::Client;
 use tempfile::{TempDir, tempdir};
 
-use crate::focus_stacking::FocusStacking;
+use crate::tasks::focus_stacking::FocusStacking;
 use crate::helpers::progress::ProgressIter;
 
 struct TaskContext {
@@ -90,6 +90,7 @@ impl FocusStacking {
             task_ctx.write_raw_image(i as usize, &resp.bytes().await?)?;
         }
 
+        // just for testing purposes
         task_ctx.make_persistent(Path::new("/tmp/compute_node_test_output"))?;
 
         Ok(())
