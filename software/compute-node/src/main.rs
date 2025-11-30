@@ -11,6 +11,7 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 
+use crate::helpers::gpu::GpuImageProcessor;
 use crate::tasks::Task;
 use crate::tasks::focus_stacking::FocusStacking;
 
@@ -133,6 +134,15 @@ async fn processing_thread(
     app_state: AppState,
     mut exec_queue_rx: mpsc::Receiver<(TaskPtr, HashMap<String, Value>)>,
 ) {
+    let gpu_processor = GpuImageProcessor::new().await;
+
+    if let Err(e) = gpu_processor {
+        println!("Failed to load GPU pipeline: {}", e);
+        return;
+    }
+
+    println!("GPU pipelines initialized successfully");
+
     loop {
         tokio::select! {
             _ = app_state.cancel_token.cancelled() => {
