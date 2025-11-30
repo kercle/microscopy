@@ -10,6 +10,7 @@ use common::rest::z_scan::ZScanMetadata;
 use common::ws::compute_node::{TaskUiDescription, Widget, WidgetPosition};
 use tokio::sync::watch;
 
+use crate::helpers::gpu::GpuImageProcessor;
 use crate::tasks::Task;
 
 const THUMBNAIL_SIZE: u32 = 250;
@@ -145,7 +146,11 @@ impl Task for FocusStacking {
         }
     }
 
-    async fn execute(&self, params: HashMap<String, Value>) {
+    async fn execute(
+        &self,
+        _gpu_image_processor: &GpuImageProcessor,
+        params: HashMap<String, Value>,
+    ) {
         let stack_id = if let Some(Value::String(stack_id)) = params.get("image_stack") {
             stack_id.clone()
         } else {

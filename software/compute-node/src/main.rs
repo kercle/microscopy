@@ -141,6 +141,8 @@ async fn processing_thread(
         return;
     }
 
+    let gpu_processor = gpu_processor.unwrap();
+
     println!("GPU pipelines initialized successfully");
 
     loop {
@@ -149,7 +151,7 @@ async fn processing_thread(
                 break;
             }
             Some((task, params)) = exec_queue_rx.recv() => {
-                task.execute(params).await;
+                task.execute(&gpu_processor, params).await;
             }
         }
     }
