@@ -1,3 +1,5 @@
+mod algorithm;
+
 use std::collections::HashMap;
 
 use anyhow::{Result, bail};
@@ -144,17 +146,16 @@ impl Task for FocusStacking {
     }
 
     async fn execute(&self, params: HashMap<String, Value>) {
-        self.set_progress(Some(0.0)).await;
-        println!("Executing focus stacking with params: {:?}", params);
+        let stack_id = if let Some(Value::String(stack_id)) = params.get("image_stack") {
+            stack_id.clone()
+        } else {
+            println!("No image stack selected for focus stacking.");
+            return;
+        };
 
-        for i in 0..=10 {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            let progress = (i as f32) / 10.0;
-            self.set_progress(Some(progress)).await;
-
-            println!("Focus stacking progress: {:.0}%", progress * 100.0);
+        if let Err(e) = self.run_task(&stack_id).await {
+            println!("Error executing focus stacking task: {}", e);
         }
-        self.set_progress(Some(1.0)).await;
     }
 
     fn get_progress_receiver(&self) -> watch::Receiver<Option<f32>> {
