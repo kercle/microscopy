@@ -43,6 +43,10 @@
 		for (const [element_id, element_entry] of Object.entries(task.elements)) {
 			if (element_entry !== undefined) {
 				input_list.push({ element_id, element: element_entry });
+
+				if ("value" in element_entry) {
+					ui_values[element_id] = element_entry.value;
+				}
 			}
 		}
 

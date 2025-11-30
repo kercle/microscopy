@@ -58,6 +58,7 @@
 		<select
 			class="select select-ghost w-full"
 			onchange={(e) => fetchUiFromParamChange(elementId, (e.target as HTMLSelectElement).value)}
+			value={element.value}
 			bind:this={html_element}
 		>
 			{#each element.options as option}
