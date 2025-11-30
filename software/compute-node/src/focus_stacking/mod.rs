@@ -1,4 +1,4 @@
-mod algorithm;
+mod task;
 
 use std::collections::HashMap;
 

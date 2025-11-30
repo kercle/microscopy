@@ -1,18 +1,10 @@
 <script lang="ts">
+	import type { ZScanMetadata } from '$lib/bindings/ZScanMetadata';
 	import Download from '$lib/icons/Download.svelte';
 	import Trash from '$lib/icons/Trash.svelte';
 	import { onMount } from 'svelte';
 
 	const Z_SCAN_API_BASE = '/api/z-scan';
-
-	type ScanEntry = {
-		timestamp: string;
-		frame_count: number;
-		relative_start_pos: number;
-		relative_stop_pos: number;
-		steps_between_layers: number;
-		uuid: string;
-	};
 
 	let startOffsetInput: HTMLInputElement;
 	let stopOffsetInput: HTMLInputElement;
@@ -21,7 +13,7 @@
 	let frameSlider: HTMLInputElement | undefined = $state();
 	let previewImage: HTMLImageElement | undefined = $state();
 
-	let data: ScanEntry[] = $state([]);
+	let data: ZScanMetadata[] = $state([]);
 	let selectedIdx: number | null = $state(null);
 
 	const selectIdx = (idx: number) => {

@@ -10,8 +10,9 @@ tokio-tungstenite = "0.28.0"
 tokio-util = "0.7.17"
 common = { path = "../common" }
 serde_json = "1.0.145"
-reqwest = "0.12.24"
+reqwest = { version = "0.12.24", features = ["json"] }
 anyhow = "1.0.100"
 async-trait = "0.1.89"
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 futures = "0.3.31"
+tempfile = "3.23.0"

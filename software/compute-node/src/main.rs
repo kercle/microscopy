@@ -1,5 +1,6 @@
 mod focus_stacking;
 mod task;
+mod helpers;
 
 use std::{collections::HashMap, env, sync::Arc};
 
