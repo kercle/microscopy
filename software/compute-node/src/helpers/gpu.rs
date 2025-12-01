@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use wgpu::util::DeviceExt;
 
 pub struct GpuImageProcessor {
     device: wgpu::Device,
-    _queue: wgpu::Queue,
-    _bind_group_layout: wgpu::BindGroupLayout,
+    queue: wgpu::Queue,
+    bind_group_layout: wgpu::BindGroupLayout,
     pipeline_layout: wgpu::PipelineLayout,
 
     pipelines: HashMap<&'static str, wgpu::ComputePipeline>,
@@ -29,8 +30,8 @@ impl GpuImageProcessor {
 
         let mut ret = Self {
             device,
-            _queue: queue,
-            _bind_group_layout: bind_group_layout,
+            queue,
+            bind_group_layout,
             pipeline_layout,
             pipelines: HashMap::new(),
         };
@@ -95,5 +96,159 @@ impl GpuImageProcessor {
 
         self.pipelines.insert(pipeline_name, pipeline);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::RgbaImage;
+
+    #[tokio::test]
+    async fn test_gpu_image_processor_creation() {
+        let processor = GpuImageProcessor::new().await;
+        assert!(processor.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sobel() {
+        let test_image = include_bytes!("../../tests/test_image.jpg");
+        let img: RgbaImage = turbojpeg::decompress_image(test_image).unwrap();
+        let (width, height) = img.dimensions();
+
+        let processor = GpuImageProcessor::new().await.unwrap();
+
+        let texture_size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        let src_texture = processor.device.create_texture_with_data(
+            &processor.queue,
+            &wgpu::TextureDescriptor {
+                label: Some("src"),
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            &img,
+        );
+
+        let dst_texture = processor.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("dst"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let bind_group = processor
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &processor.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(
+                            &src_texture.create_view(&Default::default()),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(
+                            &dst_texture.create_view(&Default::default()),
+                        ),
+                    },
+                ],
+                label: None,
+            });
+
+        let mut encoder = processor.device.create_command_encoder(&Default::default());
+        {
+            let mut cpass = encoder.begin_compute_pass(&Default::default());
+            cpass.set_pipeline(&processor.pipelines["sobel"]);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.dispatch_workgroups((width + 15) / 16, (height + 15) / 16, 1);
+        }
+        processor.queue.submit(Some(encoder.finish()));
+        processor
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None, // wait for the most recent submission
+                timeout: None,          // wait indefinitely
+            })
+            .unwrap();
+
+        // Read image back:
+        // ----------------
+
+        let bytes_per_pixel = 4;
+        let unpadded_bytes_per_row = width * bytes_per_pixel;
+        let padded_bytes_per_row = ((unpadded_bytes_per_row + 255) / 256) * 256;
+
+        let output_buffer = processor.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Output Buffer"),
+            size: (padded_bytes_per_row * height) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = processor.device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            dst_texture.as_image_copy(), // still works; now returns TexelCopyTextureInfo<'_>
+            wgpu::TexelCopyBufferInfo {
+                buffer: &output_buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row as u32),
+                    rows_per_image: Some(height as u32),
+                },
+            },
+            texture_size,
+        );
+        processor.queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = output_buffer.slice(..);
+        buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
+        processor
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None, // wait for the most recent submission
+                timeout: None,          // wait indefinitely
+            })
+            .unwrap();
+        let data = buffer_slice.get_mapped_range();
+
+        // Remove row padding
+        let mut pixels = Vec::with_capacity((width * height * bytes_per_pixel) as usize);
+        for chunk in data.chunks(padded_bytes_per_row as usize) {
+            pixels.extend_from_slice(&chunk[..(unpadded_bytes_per_row as usize)]);
+        }
+
+        // Save output image for visual inspection
+        // ---------------------------------------
+
+        let mut rgb_pixels = Vec::with_capacity((width * height * 3) as usize);
+        for chunk in pixels.chunks(4) {
+            rgb_pixels.extend_from_slice(&chunk[..3]);
+        }
+
+        // let result = RgbaImage::from_raw(width, height, pixels).unwrap();
+        // let dyn_img = image::DynamicImage::ImageRgba8(result);
+        // let image = dyn_img.to_rgb8();
+        let image = image::RgbImage::from_raw(width, height, rgb_pixels).unwrap();
+        let jpeg_data = turbojpeg::compress_image(&image, 95, turbojpeg::Subsamp::Sub2x2).unwrap();
+        std::fs::write("tests/outputs/output.jpg", &jpeg_data).unwrap();
     }
 }
