@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops;
 
 use anyhow::Result;
 use image::RgbaImage;
@@ -14,6 +15,7 @@ pub struct GpuImageProcessor {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub enum GpuFilter {
     Sobel,
     Gaussian2dBlur20,
@@ -21,6 +23,80 @@ pub enum GpuFilter {
     GaussianVBlur,
     BoxHBlur,
     BoxVBlur,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub enum GpuFilterSequence {
+    Apply(GpuFilter),
+    Chain((GpuFilter, Box<GpuFilterSequence>)),
+    Repeat(u32, Box<GpuFilterSequence>),
+}
+
+impl GpuFilterSequence {
+    pub fn to_vec(&self) -> Vec<GpuFilter> {
+        match self {
+            GpuFilterSequence::Apply(filter) => vec![filter.clone()],
+            GpuFilterSequence::Chain((filter, chain)) => {
+                let mut v = vec![filter.clone()];
+                v.extend(chain.to_vec());
+                v
+            }
+            GpuFilterSequence::Repeat(n, chain) => {
+                let mut v = Vec::new();
+                for _ in 0..*n {
+                    v.extend(chain.to_vec());
+                }
+                v
+            }
+        }
+    }
+}
+
+impl ops::Add<GpuFilterSequence> for GpuFilter {
+    type Output = GpuFilterSequence;
+
+    fn add(self, rhs: GpuFilterSequence) -> GpuFilterSequence {
+        GpuFilterSequence::Chain((self, Box::new(rhs)))
+    }
+}
+
+impl ops::Add<GpuFilter> for GpuFilter {
+    type Output = GpuFilterSequence;
+
+    fn add(self, rhs: GpuFilter) -> GpuFilterSequence {
+        GpuFilterSequence::Chain((self, Box::new(GpuFilterSequence::Apply(rhs))))
+    }
+}
+
+impl ops::Add<GpuFilter> for GpuFilterSequence {
+    type Output = GpuFilterSequence;
+
+    fn add(self, rhs: GpuFilter) -> GpuFilterSequence {
+        GpuFilterSequence::Chain((rhs, Box::new(self)))
+    }
+}
+
+impl ops::Mul<u32> for GpuFilterSequence {
+    type Output = GpuFilterSequence;
+
+    fn mul(self, rhs: u32) -> GpuFilterSequence {
+        GpuFilterSequence::Repeat(rhs, Box::new(self))
+    }
+}
+
+impl ops::Mul<u32> for GpuFilter {
+    type Output = GpuFilterSequence;
+
+    fn mul(self, rhs: u32) -> GpuFilterSequence {
+        GpuFilterSequence::Repeat(rhs, Box::new(GpuFilterSequence::Apply(self)))
+    }
+}
+
+impl From<GpuFilter> for GpuFilterSequence {
+    fn from(filter: GpuFilter) -> Self {
+        GpuFilterSequence::Apply(filter)
+    }
 }
 
 impl std::fmt::Display for GpuFilter {
@@ -271,7 +347,11 @@ impl GpuImageProcessor {
         Ok(pixels)
     }
 
-    pub async fn apply_filters(&self, img: &RgbaImage, filters: &[GpuFilter]) -> Result<RgbaImage> {
+    pub async fn apply_filters(
+        &self,
+        img: &RgbaImage,
+        filters: GpuFilterSequence,
+    ) -> Result<RgbaImage> {
         let (mut a_texture, mut b_texture) = self.init_textures(img).await?;
 
         let texture_size = wgpu::Extent3d {
@@ -280,7 +360,7 @@ impl GpuImageProcessor {
             depth_or_array_layers: 1,
         };
 
-        for filter in filters.iter() {
+        for filter in filters.to_vec().iter() {
             self.bind_shader(&filter.to_string(), texture_size, &a_texture, &b_texture)
                 .await?;
 
