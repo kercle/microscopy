@@ -148,7 +148,7 @@ impl Task for FocusStacking {
 
     async fn execute(
         &self,
-        _gpu_image_processor: &GpuImageProcessor,
+        gpu_image_processor: &GpuImageProcessor,
         params: HashMap<String, Value>,
     ) {
         let stack_id = if let Some(Value::String(stack_id)) = params.get("image_stack") {
@@ -158,7 +158,7 @@ impl Task for FocusStacking {
             return;
         };
 
-        if let Err(e) = self.run_task(&stack_id).await {
+        if let Err(e) = self.run_task( gpu_image_processor, &stack_id).await {
             println!("Error executing focus stacking task: {}", e);
         }
     }

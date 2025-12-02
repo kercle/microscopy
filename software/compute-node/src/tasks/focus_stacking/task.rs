@@ -1,13 +1,16 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use common::rest::z_scan::ZScanMetadata;
+use image::RgbaImage;
 use reqwest::Client;
 use tempfile::{TempDir, tempdir};
+use tokio::fs;
+use tokio::task::spawn_blocking;
 
-use crate::tasks::focus_stacking::FocusStacking;
+use crate::helpers::gpu::GpuImageProcessor;
 use crate::helpers::progress::ProgressIter;
+use crate::tasks::focus_stacking::FocusStacking;
 
 struct TaskContext {
     temp_dir: TempDir,
@@ -18,13 +21,13 @@ struct TaskContext {
 }
 
 impl TaskContext {
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let temp_dir = tempdir()?;
         let raw_dir_path = temp_dir.path().join("raw");
         let sobel_dir_path = temp_dir.path().join("sobel");
 
-        fs::create_dir_all(&raw_dir_path)?;
-        fs::create_dir_all(&sobel_dir_path)?;
+        fs::create_dir_all(&raw_dir_path).await?;
+        fs::create_dir_all(&sobel_dir_path).await?;
 
         Ok(TaskContext {
             temp_dir,
@@ -33,9 +36,9 @@ impl TaskContext {
         })
     }
 
-    pub fn write_raw_image(&mut self, index: usize, data: &[u8]) -> Result<()> {
+    pub async fn write_raw_image(&mut self, index: usize, data: &[u8]) -> Result<()> {
         let file_path = self.raw_dir_path.join(format!("{:05}.png", index));
-        fs::write(&file_path, data)?;
+        fs::write(&file_path, data).await?;
         self.input_images.push(file_path);
         Ok(())
     }
@@ -63,13 +66,14 @@ impl FocusStacking {
         bail!("Stack with ID {} not found", stack_id);
     }
 
-    pub async fn run_task(&self, stack_id: &str) -> Result<()> {
+    pub async fn run_task(&self, gpu_processor: &GpuImageProcessor, stack_id: &str) -> Result<()> {
         self.set_progress(Some(0.0)).await;
         println!("Executing focus stacking on stack: {}", stack_id);
 
         let stack_metadata = self.describe_stack(stack_id).await?;
 
-        let mut task_ctx = TaskContext::new()?;
+        let mut task_ctx = TaskContext::new().await?;
+        // let gpu_processor = GpuImageProcessor::new().await?;
 
         let client = Client::new();
         for i in ProgressIter::new(0..stack_metadata.frame_count, self.progress_tx.clone()) {
@@ -87,7 +91,28 @@ impl FocusStacking {
                 );
             }
 
-            task_ctx.write_raw_image(i as usize, &resp.bytes().await?)?;
+            let data = resp.bytes().await?;
+            task_ctx.write_raw_image(i as usize, &data).await?;
+
+            let img: RgbaImage = spawn_blocking(move || -> Result<RgbaImage> {
+                Ok(turbojpeg::decompress_image(&data)?)
+            })
+            .await??;
+
+            let sobel_image = gpu_processor.apply_sobel(&img).await?;
+
+            let temp_dir = task_ctx.temp_dir.path().to_path_buf();
+            spawn_blocking(move || -> Result<()> {
+                let jpeg_data =
+                    turbojpeg::compress_image(&sobel_image, 95, turbojpeg::Subsamp::Sub2x2)?;
+
+                std::fs::write(
+                    temp_dir.join("sobel").join(format!("{:05}.jpg", i)),
+                    &jpeg_data,
+                )?;
+
+                Ok(())
+            });
         }
 
         // just for testing purposes

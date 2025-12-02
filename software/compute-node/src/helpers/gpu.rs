@@ -221,7 +221,7 @@ impl GpuImageProcessor {
         Ok(pixels)
     }
 
-    async fn apply_sobel(&self, img: &RgbaImage) -> Result<RgbaImage> {
+    pub async fn apply_sobel(&self, img: &RgbaImage) -> Result<RgbaImage> {
         let dst_texture = self.submit_image(img).await?;
 
         let texture_size = wgpu::Extent3d {
