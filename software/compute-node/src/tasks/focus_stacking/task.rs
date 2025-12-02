@@ -2,14 +2,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use common::rest::z_scan::ZScanMetadata;
-use image::RgbaImage;
 use reqwest::Client;
 use tempfile::{TempDir, tempdir};
 use tokio::fs;
-use tokio::task::spawn_blocking;
 use tracing::info;
 
 use crate::gpu::{GpuImageProcessor, filters::GpuFilter};
+use crate::helpers::jpeg::{decode_jpeg, encode_jpeg};
 use crate::helpers::progress::ProgressIter;
 use crate::tasks::focus_stacking::FocusStacking;
 
@@ -91,13 +90,10 @@ impl FocusStacking {
                 );
             }
 
-            let data = resp.bytes().await?;
+            let data = resp.bytes().await?.to_vec();
             task_ctx.write_raw_image(i as usize, &data).await?;
 
-            let img: RgbaImage = spawn_blocking(move || -> Result<RgbaImage> {
-                Ok(turbojpeg::decompress_image(&data)?)
-            })
-            .await??;
+            let img = decode_jpeg(data).await?;
 
             let sobel_image = gpu_processor
                 .apply_filters(
@@ -107,17 +103,11 @@ impl FocusStacking {
                 .await?;
 
             let temp_dir = task_ctx.temp_dir.path().to_path_buf();
-            spawn_blocking(move || -> Result<()> {
-                let jpeg_data =
-                    turbojpeg::compress_image(&sobel_image, 95, turbojpeg::Subsamp::Sub2x2)?;
-
-                std::fs::write(
-                    temp_dir.join("sobel").join(format!("{:05}.jpg", i)),
-                    &jpeg_data,
-                )?;
-
-                Ok(())
-            });
+            fs::write(
+                temp_dir.join("sobel").join(format!("{:05}.jpg", i)),
+                encode_jpeg(sobel_image, 95).await?,
+            )
+            .await?;
         }
 
         // just for testing purposes
