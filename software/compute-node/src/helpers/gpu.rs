@@ -13,6 +13,18 @@ pub struct GpuImageProcessor {
     pipelines: HashMap<&'static str, wgpu::ComputePipeline>,
 }
 
+pub enum GpuFilter {
+    Sobel,
+}
+
+impl std::fmt::Display for GpuFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GpuFilter::Sobel => write!(f, "sobel"),
+        }
+    }
+}
+
 impl GpuImageProcessor {
     pub async fn new() -> Result<Self> {
         let adapter = wgpu::Instance::default()
@@ -38,6 +50,7 @@ impl GpuImageProcessor {
         };
 
         ret.load_pipeline("sobel").await?;
+        ret.load_pipeline("gaussian_hblur").await?;
 
         Ok(ret)
     }
@@ -74,13 +87,14 @@ impl GpuImageProcessor {
     async fn load_pipeline(&mut self, pipeline_name: &'static str) -> Result<()> {
         let shader_source = match pipeline_name {
             "sobel" => include_str!("../shaders/sobel.wgsl"),
+            "gaussian_hblur" => include_str!("../shaders/gaussian_hblur.wgsl"),
             _ => return Err(anyhow::anyhow!("Unknown pipeline: {}", pipeline_name)),
         };
 
         let shader = self
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Sobel Shader"),
+                label: Some(pipeline_name),
                 source: wgpu::ShaderSource::Wgsl(shader_source.into()),
             });
 
@@ -99,7 +113,7 @@ impl GpuImageProcessor {
         Ok(())
     }
 
-    async fn submit_image(&self, img: &RgbaImage) -> Result<wgpu::Texture> {
+    async fn init_textures(&self, img: &RgbaImage) -> Result<(wgpu::Texture, wgpu::Texture)> {
         let (width, height) = img.dimensions();
         let texture_size = wgpu::Extent3d {
             width,
@@ -136,6 +150,16 @@ impl GpuImageProcessor {
             view_formats: &[],
         });
 
+        Ok((src_texture, dst_texture))
+    }
+
+    async fn bind_shader(
+        &self,
+        shader: &str,
+        texture_size: wgpu::Extent3d,
+        src_texture: &wgpu::Texture,
+        dst_texture: &wgpu::Texture,
+    ) -> Result<()> {
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
             entries: &[
@@ -158,9 +182,13 @@ impl GpuImageProcessor {
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut cpass = encoder.begin_compute_pass(&Default::default());
-            cpass.set_pipeline(&self.pipelines["sobel"]);
+            cpass.set_pipeline(&self.pipelines[shader]);
             cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.dispatch_workgroups((width + 15) / 16, (height + 15) / 16, 1);
+            cpass.dispatch_workgroups(
+                (texture_size.width + 15) / 16,
+                (texture_size.height + 15) / 16,
+                1,
+            );
         }
         self.queue.submit(Some(encoder.finish()));
         self.device.poll(wgpu::PollType::Wait {
@@ -168,7 +196,7 @@ impl GpuImageProcessor {
             timeout: None,
         })?;
 
-        Ok(dst_texture)
+        Ok(())
     }
 
     async fn read_from_texture(
@@ -222,7 +250,11 @@ impl GpuImageProcessor {
     }
 
     pub async fn apply_sobel(&self, img: &RgbaImage) -> Result<RgbaImage> {
-        let dst_texture = self.submit_image(img).await?;
+        self.apply_filters(img, &[GpuFilter::Sobel]).await
+    }
+
+    pub async fn apply_filters(&self, img: &RgbaImage, filters: &[GpuFilter]) -> Result<RgbaImage> {
+        let (mut a_texture, mut b_texture) = self.init_textures(img).await?;
 
         let texture_size = wgpu::Extent3d {
             width: img.width(),
@@ -230,14 +262,21 @@ impl GpuImageProcessor {
             depth_or_array_layers: 1,
         };
 
-        let pixels = self.read_from_texture(&dst_texture, texture_size).await?;
+        for filter in filters.iter() {
+            self.bind_shader(&filter.to_string(), texture_size, &a_texture, &b_texture)
+                .await?;
 
-        let sobel_image =
+            std::mem::swap(&mut a_texture, &mut b_texture);
+        }
+
+        let pixels = self.read_from_texture(&a_texture, texture_size).await?;
+
+        let image_data =
             RgbaImage::from_raw(img.width(), img.height(), pixels).ok_or_else(|| {
                 anyhow::anyhow!("Failed to create image from raw data after Sobel filter")
             })?;
 
-        Ok(sobel_image)
+        Ok(image_data)
     }
 }
 
