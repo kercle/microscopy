@@ -98,7 +98,7 @@ impl FocusStacking {
             let sobel_image = gpu_processor
                 .apply_filters(
                     &img,
-                    GpuFilter::Sobel + (GpuFilter::BoxHBlur + GpuFilter::BoxVBlur) * 10,
+                    GpuFilter::Sobel + (GpuFilter::BoxHBlur + GpuFilter::BoxVBlur) * 16,
                 )
                 .await?;
 
