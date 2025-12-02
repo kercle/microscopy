@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use common::ws::{compute_node::TaskUiDescription, value::Value};
 use tokio::sync::watch;
 
-use crate::helpers::gpu::GpuImageProcessor;
+use crate::gpu::GpuImageProcessor;
 
 #[async_trait]
 pub trait Task {

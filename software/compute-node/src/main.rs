@@ -1,5 +1,6 @@
 mod helpers;
 mod tasks;
+mod gpu;
 
 use std::{collections::HashMap, env, sync::Arc};
 
@@ -12,7 +13,7 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::helpers::gpu::GpuImageProcessor;
+use crate::gpu::GpuImageProcessor;
 use crate::tasks::Task;
 use crate::tasks::focus_stacking::FocusStacking;
 

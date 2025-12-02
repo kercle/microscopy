@@ -9,7 +9,7 @@ use tokio::fs;
 use tokio::task::spawn_blocking;
 use tracing::info;
 
-use crate::helpers::gpu::{GpuFilter, GpuImageProcessor};
+use crate::gpu::{GpuImageProcessor, filters::GpuFilter};
 use crate::helpers::progress::ProgressIter;
 use crate::tasks::focus_stacking::FocusStacking;
 
