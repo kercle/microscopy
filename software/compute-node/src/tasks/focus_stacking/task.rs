@@ -100,7 +100,28 @@ impl FocusStacking {
             .await??;
 
             let sobel_image = gpu_processor
-                .apply_filters(&img, &[GpuFilter::Sobel])
+                .apply_filters(
+                    &img,
+                    &[
+                        GpuFilter::Sobel,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                        GpuFilter::BoxHBlur,
+                        GpuFilter::BoxVBlur,
+                    ],
+                )
                 .await?;
 
             let temp_dir = task_ctx.temp_dir.path().to_path_buf();

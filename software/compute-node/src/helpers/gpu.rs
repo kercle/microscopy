@@ -13,14 +13,25 @@ pub struct GpuImageProcessor {
     pipelines: HashMap<&'static str, wgpu::ComputePipeline>,
 }
 
+#[allow(dead_code)]
 pub enum GpuFilter {
     Sobel,
+    Gaussian2dBlur20,
+    GaussianHBlur,
+    GaussianVBlur,
+    BoxHBlur,
+    BoxVBlur,
 }
 
 impl std::fmt::Display for GpuFilter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GpuFilter::Sobel => write!(f, "sobel"),
+            GpuFilter::Gaussian2dBlur20 => write!(f, "gaussian_2d_blur_20"),
+            GpuFilter::GaussianHBlur => write!(f, "gaussian_hblur"),
+            GpuFilter::GaussianVBlur => write!(f, "gaussian_vblur"),
+            GpuFilter::BoxHBlur => write!(f, "box_hblur"),
+            GpuFilter::BoxVBlur => write!(f, "box_vblur"),
         }
     }
 }
@@ -50,6 +61,11 @@ impl GpuImageProcessor {
         };
 
         ret.load_pipeline("sobel").await?;
+        ret.load_pipeline("gaussian_2d_blur_20").await?;
+        ret.load_pipeline("gaussian_hblur").await?;
+        ret.load_pipeline("gaussian_vblur").await?;
+        ret.load_pipeline("box_hblur").await?;
+        ret.load_pipeline("box_vblur").await?;
 
         Ok(ret)
     }
@@ -86,6 +102,11 @@ impl GpuImageProcessor {
     async fn load_pipeline(&mut self, pipeline_name: &'static str) -> Result<()> {
         let shader_source = match pipeline_name {
             "sobel" => include_str!("../shaders/sobel.wgsl"),
+            "gaussian_2d_blur_20" => include_str!("../shaders/gaussian_2d_blur_20.wgsl"),
+            "gaussian_hblur" => include_str!("../shaders/gaussian_hblur.wgsl"),
+            "gaussian_vblur" => include_str!("../shaders/gaussian_vblur.wgsl"),
+            "box_hblur" => include_str!("../shaders/box_hblur.wgsl"),
+            "box_vblur" => include_str!("../shaders/box_vblur.wgsl"),
             _ => return Err(anyhow::anyhow!("Unknown pipeline: {}", pipeline_name)),
         };
 
