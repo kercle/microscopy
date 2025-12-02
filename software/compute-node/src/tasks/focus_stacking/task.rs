@@ -72,8 +72,9 @@ impl FocusStacking {
 
         let stack_metadata = self.describe_stack(stack_id).await?;
 
-        let mut col_res = Vec::new();
-        let mut total_weight = Vec::new();
+        let mut stacked_data = Vec::new();
+        let mut weight_map = Vec::new();
+
         let mut width = 0;
         let mut height = 0;
 
@@ -107,9 +108,9 @@ impl FocusStacking {
                 )
                 .await?;
 
-            if col_res.len() == 0 {
-                col_res.resize(sobel_image.len(), 0.0);
-                total_weight.resize(sobel_image.len(), 0.0);
+            if stacked_data.len() == 0 {
+                stacked_data.resize(sobel_image.len(), 0.0);
+                weight_map.resize(sobel_image.len(), 0.0);
 
                 width = sobel_image.width();
                 height = sobel_image.height();
@@ -122,8 +123,12 @@ impl FocusStacking {
                 .enumerate()
             {
                 let intensity = *sobel_val as f32 / 255.0;
-                col_res[idx] += (*col_val as f32 / 255.0) * intensity;
-                total_weight[idx] += intensity;
+                if intensity < weight_map[idx] {
+                    continue;
+                }
+
+                stacked_data[idx] = (*col_val as f32 / 255.0) * intensity;
+                weight_map[idx] = intensity;
             }
 
             let temp_dir = task_ctx.temp_dir.path().to_path_buf();
@@ -136,10 +141,10 @@ impl FocusStacking {
 
         assert!(width > 0 && height > 0);
 
-        let mut final_img = vec![0u8; col_res.len()];
-        for idx in 0..col_res.len() {
-            if total_weight[idx] > 0.0 {
-                let clipped = (col_res[idx] / total_weight[idx]).min(1.0).max(0.0);
+        let mut final_img = vec![0u8; stacked_data.len()];
+        for idx in 0..stacked_data.len() {
+            if weight_map[idx] > 0.0 {
+                let clipped = (stacked_data[idx] / weight_map[idx]).min(1.0).max(0.0);
                 final_img[idx] = (clipped * 255.0) as u8;
             } else {
                 final_img[idx] = 0;
