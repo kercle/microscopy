@@ -15,12 +15,16 @@ pub struct GpuImageProcessor {
 
 pub enum GpuFilter {
     Sobel,
+    GaussianHBlur,
+    GaussianVBlur,
 }
 
 impl std::fmt::Display for GpuFilter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GpuFilter::Sobel => write!(f, "sobel"),
+            GpuFilter::GaussianHBlur => write!(f, "gaussian_hblur"),
+            GpuFilter::GaussianVBlur => write!(f, "gaussian_vblur"),
         }
     }
 }
@@ -51,6 +55,7 @@ impl GpuImageProcessor {
 
         ret.load_pipeline("sobel").await?;
         ret.load_pipeline("gaussian_hblur").await?;
+        ret.load_pipeline("gaussian_vblur").await?;
 
         Ok(ret)
     }
@@ -88,6 +93,7 @@ impl GpuImageProcessor {
         let shader_source = match pipeline_name {
             "sobel" => include_str!("../shaders/sobel.wgsl"),
             "gaussian_hblur" => include_str!("../shaders/gaussian_hblur.wgsl"),
+            "gaussian_vblur" => include_str!("../shaders/gaussian_vblur.wgsl"),
             _ => return Err(anyhow::anyhow!("Unknown pipeline: {}", pipeline_name)),
         };
 
@@ -130,7 +136,10 @@ impl GpuImageProcessor {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             },
             wgpu::util::TextureDataOrder::LayerMajor,
@@ -209,7 +218,7 @@ impl GpuImageProcessor {
         let padded_bytes_per_row = ((unpadded_bytes_per_row + 255) / 256) * 256;
 
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Output Buffer"),
+            label: Some("out"),
             size: (padded_bytes_per_row * texture_size.height) as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
@@ -247,10 +256,6 @@ impl GpuImageProcessor {
         }
 
         Ok(pixels)
-    }
-
-    pub async fn apply_sobel(&self, img: &RgbaImage) -> Result<RgbaImage> {
-        self.apply_filters(img, &[GpuFilter::Sobel]).await
     }
 
     pub async fn apply_filters(&self, img: &RgbaImage, filters: &[GpuFilter]) -> Result<RgbaImage> {

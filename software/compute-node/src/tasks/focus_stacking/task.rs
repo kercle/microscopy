@@ -8,7 +8,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::fs;
 use tokio::task::spawn_blocking;
 
-use crate::helpers::gpu::GpuImageProcessor;
+use crate::helpers::gpu::{GpuFilter, GpuImageProcessor};
 use crate::helpers::progress::ProgressIter;
 use crate::tasks::focus_stacking::FocusStacking;
 
@@ -73,7 +73,6 @@ impl FocusStacking {
         let stack_metadata = self.describe_stack(stack_id).await?;
 
         let mut task_ctx = TaskContext::new().await?;
-        // let gpu_processor = GpuImageProcessor::new().await?;
 
         let client = Client::new();
         for i in ProgressIter::new(0..stack_metadata.frame_count, self.progress_tx.clone()) {
@@ -99,7 +98,11 @@ impl FocusStacking {
             })
             .await??;
 
-            let sobel_image = gpu_processor.apply_sobel(&img).await?;
+            let sobel_image = gpu_processor.apply_filters(&img, &[
+                GpuFilter::Sobel,
+                GpuFilter::GaussianHBlur,
+                GpuFilter::GaussianVBlur,
+            ]).await?;
 
             let temp_dir = task_ctx.temp_dir.path().to_path_buf();
             spawn_blocking(move || -> Result<()> {
