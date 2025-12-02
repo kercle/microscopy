@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use anyhow::{Result, bail};
 use common::ws::value::Value;
 use reqwest;
+use tracing::{error, warn};
 
 use common::rest::z_scan::ZScanMetadata;
 use common::ws::compute_node::{TaskUiDescription, Widget, WidgetPosition};
@@ -59,7 +60,7 @@ impl FocusStacking {
         let image_stacks = Self::fetch_image_stacks(host_name).await;
 
         if image_stacks.is_err() {
-            println!(
+            error!(
                 "Failed to fetch image stacks: {}",
                 image_stacks.err().unwrap()
             );
@@ -75,7 +76,7 @@ impl FocusStacking {
     ) -> Option<String> {
         if let Some(Value::String(selected_stack)) = params.get("image_stack") {
             if !image_stacks.contains(&selected_stack) {
-                println!(
+                error!(
                     "Selected image stack {} not found. Defaulting to first available stack.",
                     selected_stack
                 );
@@ -83,7 +84,7 @@ impl FocusStacking {
 
             Some(selected_stack.clone())
         } else if !image_stacks.is_empty() {
-            println!(
+            warn!(
                 "No image stack selected. Defaulting to first available stack {}.",
                 image_stacks[0]
             );
@@ -154,12 +155,12 @@ impl Task for FocusStacking {
         let stack_id = if let Some(Value::String(stack_id)) = params.get("image_stack") {
             stack_id.clone()
         } else {
-            println!("No image stack selected for focus stacking.");
+            error!("No image stack selected for focus stacking.");
             return;
         };
 
-        if let Err(e) = self.run_task( gpu_image_processor, &stack_id).await {
-            println!("Error executing focus stacking task: {}", e);
+        if let Err(e) = self.run_task(gpu_image_processor, &stack_id).await {
+            error!("Error executing focus stacking task: {}", e);
         }
     }
 

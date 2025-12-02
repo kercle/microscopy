@@ -7,6 +7,7 @@ use reqwest::Client;
 use tempfile::{TempDir, tempdir};
 use tokio::fs;
 use tokio::task::spawn_blocking;
+use tracing::info;
 
 use crate::helpers::gpu::{GpuFilter, GpuImageProcessor};
 use crate::helpers::progress::ProgressIter;
@@ -68,7 +69,7 @@ impl FocusStacking {
 
     pub async fn run_task(&self, gpu_processor: &GpuImageProcessor, stack_id: &str) -> Result<()> {
         self.set_progress(Some(0.0)).await;
-        println!("Executing focus stacking on stack: {}", stack_id);
+        info!("Executing focus stacking on stack: {}", stack_id);
 
         let stack_metadata = self.describe_stack(stack_id).await?;
 

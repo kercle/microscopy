@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::WatchStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
 
 use crate::helpers::gpu::GpuImageProcessor;
 use crate::tasks::Task;
@@ -87,14 +88,14 @@ async fn process_websocket_message(
         } => {
             if let Some(task) = app_state.tasks.get(task_name.as_str()) {
                 if let Err(e) = app_state.exec_queue_tx.try_send((task.clone(), params)) {
-                    println!(
+                    error!(
                         "Failed to enqueue FocusStacking task for compute node: {compute_node_uuid}, error: {e}"
                     );
                 } else {
-                    println!("Enqueued FocusStacking task for compute node: {compute_node_uuid}");
+                    info!("Enqueued FocusStacking task for compute node: {compute_node_uuid}");
                 }
             } else {
-                println!("Received StartTask for unknown task: {task_name}");
+                warn!("Received StartTask for unknown task: {task_name}");
             }
         }
         _ => {
@@ -110,22 +111,22 @@ async fn process_message(
 ) {
     match msg {
         Message::Text(text) => {
-            println!("Received text message: {}", text);
+            debug!("Received text message: {}", text);
 
             if let Ok(ws_msg) = serde_json::from_str::<WebSocketMessage>(&text) {
                 process_websocket_message(ws_msg, app_state, sender_tx).await;
             } else {
-                println!("Failed to parse WebSocket message");
+                warn!("Failed to parse WebSocket message");
             }
         }
         Message::Binary(bin) => {
-            println!("Received binary message: {:?}", bin);
+            debug!("Received binary message: {:?}", bin);
         }
         Message::Close(frame) => {
-            println!("Connection closed: {:?}", frame);
+            info!("Connection closed: {:?}", frame);
         }
         _ => {
-            println!("Received other message: {:?}", msg);
+            debug!("Received other message: {:?}", msg);
         }
     }
 }
@@ -137,13 +138,13 @@ async fn processing_thread(
     let gpu_processor = GpuImageProcessor::new().await;
 
     if let Err(e) = gpu_processor {
-        println!("Failed to load GPU pipeline: {}", e);
+        error!("Failed to load GPU pipeline: {}", e);
         return;
     }
 
     let gpu_processor = gpu_processor.unwrap();
 
-    println!("GPU pipelines initialized successfully");
+    info!("GPU pipelines initialized successfully");
 
     loop {
         tokio::select! {
@@ -168,11 +169,11 @@ async fn receiver_thread(
                 break;
             }
             msg = read.next() => {
-                println!("Received a message");
+                debug!("Received a message");
                 if let Some(Ok(msg)) = msg {
                     process_message(msg, &app_state, &sender_tx).await;
                 } else {
-                    println!("Connection closed or error occurred");
+                    info!("Connection closed or error occurred");
                     break;
                 }
             }
@@ -237,7 +238,7 @@ async fn ctrlc_handler(app_state: AppState) {
         _ = app_state.cancel_token.cancelled() => {
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("Ctrl-C received, shutting down...");
+            info!("Ctrl-C received, shutting down...");
             app_state.cancel_token.cancel();
         }
     }
@@ -245,6 +246,9 @@ async fn ctrlc_handler(app_state: AppState) {
 
 #[tokio::main]
 async fn main() {
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
+
     let host_name = env::args()
         .nth(1)
         .unwrap_or_else(|| panic!("this program requires at least one argument"));
@@ -252,7 +256,7 @@ async fn main() {
     let (ws_stream, _) = connect_async(format!("ws://{host_name}/api/ws"))
         .await
         .expect("Failed to connect");
-    println!("WebSocket handshake has been successfully completed");
+    info!("WebSocket handshake has been successfully completed");
 
     // let task_focus_stacking: TaskPtr =
     //     ;
