@@ -15,16 +15,12 @@ pub struct GpuImageProcessor {
 
 pub enum GpuFilter {
     Sobel,
-    GaussianHBlur,
-    GaussianVBlur,
 }
 
 impl std::fmt::Display for GpuFilter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GpuFilter::Sobel => write!(f, "sobel"),
-            GpuFilter::GaussianHBlur => write!(f, "gaussian_hblur"),
-            GpuFilter::GaussianVBlur => write!(f, "gaussian_vblur"),
         }
     }
 }
@@ -54,8 +50,6 @@ impl GpuImageProcessor {
         };
 
         ret.load_pipeline("sobel").await?;
-        ret.load_pipeline("gaussian_hblur").await?;
-        ret.load_pipeline("gaussian_vblur").await?;
 
         Ok(ret)
     }
@@ -92,8 +86,6 @@ impl GpuImageProcessor {
     async fn load_pipeline(&mut self, pipeline_name: &'static str) -> Result<()> {
         let shader_source = match pipeline_name {
             "sobel" => include_str!("../shaders/sobel.wgsl"),
-            "gaussian_hblur" => include_str!("../shaders/gaussian_hblur.wgsl"),
-            "gaussian_vblur" => include_str!("../shaders/gaussian_vblur.wgsl"),
             _ => return Err(anyhow::anyhow!("Unknown pipeline: {}", pipeline_name)),
         };
 
