@@ -72,6 +72,11 @@ impl FocusStacking {
 
         let stack_metadata = self.describe_stack(stack_id).await?;
 
+        let mut col_res = Vec::new();
+        let mut total_weight = Vec::new();
+        let mut width = 0;
+        let mut height = 0;
+
         let mut task_ctx = TaskContext::new().await?;
 
         let client = Client::new();
@@ -102,6 +107,25 @@ impl FocusStacking {
                 )
                 .await?;
 
+            if col_res.len() == 0 {
+                col_res.resize(sobel_image.len(), 0.0);
+                total_weight.resize(sobel_image.len(), 0.0);
+
+                width = sobel_image.width();
+                height = sobel_image.height();
+            }
+
+            for (idx, (col_val, sobel_val)) in img
+                .as_raw()
+                .iter()
+                .zip(sobel_image.as_raw().iter())
+                .enumerate()
+            {
+                let intensity = *sobel_val as f32 / 255.0;
+                col_res[idx] += (*col_val as f32 / 255.0) * intensity;
+                total_weight[idx] += intensity;
+            }
+
             let temp_dir = task_ctx.temp_dir.path().to_path_buf();
             fs::write(
                 temp_dir.join("sobel").join(format!("{:05}.jpg", i)),
@@ -109,6 +133,29 @@ impl FocusStacking {
             )
             .await?;
         }
+
+        assert!(width > 0 && height > 0);
+
+        let mut final_img = vec![0u8; col_res.len()];
+        for idx in 0..col_res.len() {
+            if total_weight[idx] > 0.0 {
+                let clipped = (col_res[idx] / total_weight[idx]).min(1.0).max(0.0);
+                final_img[idx] = (clipped * 255.0) as u8;
+            } else {
+                final_img[idx] = 0;
+            }
+        }
+
+        let temp_dir = task_ctx.temp_dir.path().to_path_buf();
+        fs::write(
+            temp_dir.join("final.jpg"),
+            encode_jpeg(
+                image::RgbaImage::from_raw(width, height, final_img)
+                    .ok_or_else(|| anyhow::anyhow!("Failed to create final image"))?,
+                95,
+            )
+            .await?,
+        ).await?;
 
         // just for testing purposes
         task_ctx.make_persistent(Path::new("/tmp/compute_node_test_output"))?;
