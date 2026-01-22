@@ -1,13 +1,24 @@
 # Microscope automation project
 
-![](./assets/microscope.png)
-
 This is a small passion project of mine in which I implement a few automations to my Bresser Researcher Trino 40-1000x. A few design-goals are:
 
 - Minimally intrusive in the sense that the changes to the microscope should be revertible as much as possible.
 - The microscope should still be fully usable in the original (analogue) way.
 
-## Electronics
+## Gallery
+
+A few composite images obtained by focus stacking:
+
+| Daphnia | Spider mite | Unknown mite |
+|---------|-------------|--------------------------|
+| ![](./assets/gallery/daphnia.jpg) | ![](./assets/gallery/spider_mite.jpg) | ![](./assets/gallery/unknown_mite.jpg) |
+| *Notes:* The sample was treated with bleach in order to immobilize organisms. Brownian motion was prevented by stabilizing the sample in Xanthan gum. | *Notes:* The sample was frozen to immobilize the specimen. It was taken from one of my house plants. | *Notes:* The sample was collected from the soil in one of my house plants. It was immobilized by freezing. Possibly of the order Mesostigmata. |
+
+## Hardware
+
+![](./assets/microscope.png)
+
+### Electronics
 
 The control electronics is split between two controllers. The low-level control is handled by an ESP32 microcontroller, with the stepping motors being driven by TMC2208 stepper drivers.
 
